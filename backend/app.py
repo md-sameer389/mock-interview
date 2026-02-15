@@ -47,8 +47,45 @@ def init_db_if_missing():
                 with open(seed_path, 'r') as f:
                     conn.executescript(f.read())
             
+            # --- SEED DEFAULT ADMIN & DUMMY DATA ---
+            import bcrypt
+            def hash_pw(pw):
+                return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            # 1. Add Default Admin
+            admin_pw_hash = hash_pw('admin123')
+            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+                         ("Admin User", "admin@mock.com", admin_pw_hash, "admin"))
+            
+            # 2. Add Dummy Students
+            student_pw_hash = hash_pw('student123')
+            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+                         ("Sameer Student", "student@example.com", student_pw_hash, "student"))
+            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+                         ("John Doe", "john@example.com", student_pw_hash, "student"))
+            
+            # 3. Add Some Dummy Interview Data
+            # Note: We need user_id and resume_id. We'll add dummy resumes first.
+            conn.execute("INSERT INTO resumes (user_id, filename, extracted_text) VALUES (?, ?, ?)",
+                         (2, "sample_resume.pdf", "Python, Java, SQL, Web Development"))
+            
+            # Add a completed session
+            conn.execute("""
+                INSERT INTO interview_sessions 
+                (user_id, resume_id, total_questions, total_score, status) 
+                VALUES (?, ?, ?, ?, ?)
+            """, (2, 1, 5, 8.5, "completed"))
+            
+            # Add an in-progress session
+            conn.execute("""
+                INSERT INTO interview_sessions 
+                (user_id, resume_id, total_questions, status) 
+                VALUES (?, ?, ?, ?)
+            """, (3, 1, 10, "in_progress"))
+            
+            conn.commit()
             conn.close()
-            print("Database initialized successfully.")
+            print("Database initialized with Admin and Dummy data successfully.")
         except Exception as e:
             print(f"Error initializing database: {e}")
 
