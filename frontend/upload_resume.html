@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Resume | Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/animations.css">
+</head>
+
+<body class="command-center-body">
+    <!-- Dynamic Background -->
+    <div class="ambient-bg"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="hud-container">
+        <!-- HEADER -->
+        <header class="hud-header glass-panel">
+            <div class="logo-area">
+                <span class="status-dot online"></span>
+                <span class="system-text">CANDIDATE PORTAL <span class="version">v2.0</span></span>
+            </div>
+            <div class="user-display">
+                <span class="system-text">LOGGED IN AS: <span id="user-display-email"
+                        class="highlight">USER</span></span>
+                <button onclick="logout()" class="icon-btn-sm" title="Logout">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT: Split View -->
+        <main class="hud-main">
+            <!-- LEFT: Upload Zone -->
+            <section class="interviewer-stage">
+                <div class="glass-panel"
+                    style="padding: var(--space-xl); width: 100%; max-width: 500px; text-align: center;">
+                    <h2 class="section-title">INITIALIZE INTERVIEW</h2>
+                    <p class="subtitle">Upload resume to calibrate system</p>
+
+                    <form id="upload-form" class="upload-area" onsubmit="handleUpload(event)">
+                        <input type="file" id="resume-file" accept=".pdf" hidden>
+                        <label for="resume-file" class="drop-zone" id="file-drop-zone">
+                            <div class="upload-icon-container">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+                                    stroke="var(--secondary-accent)" stroke-width="1.5">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                                </svg>
+                            </div>
+                            <span id="file-instruction">DROP PDF RESUME HERE</span>
+                            <span id="file-selected-name" class="file-name" style="display: none;">resume.pdf</span>
+                        </label>
+
+                        <!-- PERSONA SELECTOR -->
+                        <div id="persona-selector" style="text-align: left; margin-top: 2rem; display: none;">
+                            <p class="subtitle" style="font-size: 0.9rem; margin-bottom: 10px;">SELECT INTERVIEWER
+                                PERSONA:</p>
+                            <div class="persona-grid">
+                                <div class="persona-card active" onclick="selectPersona('standard', this)">
+                                    <div class="p-icon">🤖</div>
+                                    <div class="p-info">
+                                        <div class="p-name">Standard AI</div>
+                                        <div class="p-desc">Balanced mix of technical and behavioral questions.</div>
+                                    </div>
+                                </div>
+                                <div class="persona-card" onclick="selectPersona('technical', this)">
+                                    <div class="p-icon">👨‍💻</div>
+                                    <div class="p-info">
+                                        <div class="p-name">Strict Tech Lead</div>
+                                        <div class="p-desc">Deep technical grilling. Focuses on hard problems.</div>
+                                    </div>
+                                </div>
+                                <div class="persona-card" onclick="selectPersona('hr', this)">
+                                    <div class="p-icon">👔</div>
+                                    <div class="p-info">
+                                        <div class="p-name">HR Manager</div>
+                                        <div class="p-desc">Focuses on soft skills, culture fit, and teamwork.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div id="upload-progress" class="progress-bar-container"
+                            style="display: none; width: 100%; margin-top: 1rem;">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+
+                        <!-- Skills Display -->
+                        <div id="extracted-skills-area"
+                            style="display: none; margin-top: 20px; animation: fadeIn 0.5s;">
+                            <p class="subtitle" style="text-align: left; font-size: 0.8rem; margin-bottom: 10px;">
+                                DETECTED CAPABILITIES:</p>
+                            <div id="skills-tags"
+                                style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+                                <!-- Skills injected here -->
+                            </div>
+                        </div>
+
+                        <button type="submit" id="upload-btn" class="primary-btn mt-4" disabled>
+                            INITIATE SCAN <span class="arrow">→</span>
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- RIGHT: History Log -->
+            <section class="interaction-zone">
+                <div class="glass-panel-dark"
+                    style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
+                    <div class="panel-header"
+                        style="padding: var(--space-md); border-bottom: 1px solid var(--glass-border);">
+                        <span class="system-text">/// SESSION_LOGS</span>
+                    </div>
+                    <div id="history-list" class="history-list" style="overflow-y: auto; padding: var(--space-md);">
+                        <!-- History Items Injected Here -->
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- TOAST -->
+        <div id="message" class="system-toast"></div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script>
+        // Auth Check
+        const userId = localStorage.getItem('user_id');
+        const userEmail = localStorage.getItem('user_email');
+        if (!userId) window.location.href = 'index.html';
+
+        document.getElementById('user-display-email').textContent = userEmail;
+
+        // File Handling
+        const dropZone = document.getElementById('file-drop-zone');
+        const fileInput = document.getElementById('resume-file');
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+        // Drag & Drop
+        ['dragenter', 'dragover'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                dropZone.classList.add('active');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                dropZone.classList.remove('active');
+            })
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        // Global Persona State
+        let selectedPersona = 'standard';
+
+        function selectPersona(persona, el) {
+            selectedPersona = persona;
+            document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function handleFile(file) {
+            if (!file || file.type !== 'application/pdf') {
+                showToast("INVALID FORMAT: PDF REQUIRED", "error");
+                return;
+            }
+            selectedFile = file;
+            document.getElementById('file-instruction').style.display = 'none';
+            const nameDisplay = document.getElementById('file-selected-name');
+            nameDisplay.textContent = file.name;
+            nameDisplay.style.display = 'block';
+            nameDisplay.classList.add('animate-pulse');
+
+            // Show Selector
+            document.getElementById('persona-selector').style.display = 'block';
+
+            document.getElementById('upload-btn').disabled = false;
+        }
+
+        async function handleUpload(e) {
+            e.preventDefault();
+            if (!selectedFile) return;
+
+            const btn = document.getElementById('upload-btn');
+            btn.innerHTML = 'SCANNING...';
+            btn.disabled = true;
+            document.getElementById('upload-progress').style.display = 'block';
+
+            // Sim Progress
+            let width = 0;
+            const interval = setInterval(() => {
+                width += 5;
+                if (width > 90) clearInterval(interval);
+                document.getElementById('progress-fill').style.width = width + '%';
+            }, 100);
+
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('file', selectedFile);
+
+            try {
+                // 1. Upload
+                const uploadRes = await fetch(`${API_BASE_URL}/resume/upload`, {
+                    method: 'POST', body: formData
+                });
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) throw new Error(uploadData.error);
+
+                // SHOW SKILLS ANIMATION
+                document.getElementById('upload-progress').style.display = 'none';
+                document.getElementById('persona-selector').style.display = 'none'; // hide selector during animation
+
+                const skillsDiv = document.getElementById('extracted-skills-area');
+                if (skillsDiv) {
+                    skillsDiv.style.display = 'block';
+                    const skillsList = document.getElementById('skills-tags');
+                    skillsList.innerHTML = '';
+
+                    const skills = uploadData.skills_found || ['No specific skills detected'];
+                    skills.forEach((skill, i) => {
+                        setTimeout(() => {
+                            const tag = document.createElement('span');
+                            tag.className = 'skill-tag';
+                            tag.textContent = skill;
+                            skillsList.appendChild(tag);
+                        }, i * 200);
+                    });
+
+                    showToast(`DETECTED ${skills.length} SKILLS. CALIBRATING (${selectedPersona.toUpperCase()})...`, "success");
+
+                    // Wait for user to read skills before starting
+                    await new Promise(r => setTimeout(r, 2000 + (skills.length * 200)));
+                }
+
+                // 2. Start Session
+                const startRes = await fetch(`${API_BASE_URL}/interview/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        resume_id: uploadData.resume_id,
+                        persona: selectedPersona
+                    })
+                });
+                const startData = await startRes.json();
+                if (!startRes.ok) throw new Error(startData.error);
+
+                // Complete
+                clearInterval(interval);
+                document.getElementById('progress-fill').style.width = '100%';
+
+                // Save Session
+                localStorage.setItem('session_id', startData.session_id);
+                // questions list no longer needed on client (server managed)
+
+                showToast("SYSTEM CALIBRATED. LAUNCHING...", "success");
+                setTimeout(() => window.location.href = 'interview.html', 1000);
+
+            } catch (err) {
+                console.error(err);
+                showToast("ERROR: " + err.message, "error");
+                btn.innerHTML = 'RETRY SCAN';
+                btn.disabled = false;
+                clearInterval(interval);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/interview/history`);
+                const data = await res.json();
+
+                const list = document.getElementById('history-list');
+                if (data.sessions && data.sessions.length > 0) {
+                    list.innerHTML = data.sessions.map((s, i) => `
+                        <div class="log-entry animate-slide-in-right" style="animation-delay: ${i * 0.1}s">
+                            <div class="log-header">
+                                <span class="log-date">${formatDate(s.started_at)}</span>
+                                <span class="log-score ${s.total_score >= 7 ? 'good' : 'avg'}">${s.total_score.toFixed(1)}/10</span>
+                            </div>
+                            <div class="log-status">STATUS: ${s.status.toUpperCase()}</div>
+                            ${s.status === 'completed' ? `<a href="result.html?session_id=${s.id}" class="log-link">VIEW REPORT >></a>` : ''}
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div class="system-text">NO LOGS FOUND</div>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function showToast(msg, type) {
+            const t = document.getElementById('message');
+            t.textContent = msg;
+            t.className = `system-toast show ${type}`;
+            setTimeout(() => t.className = 'system-toast', 3000);
+        }
+
+        loadHistory();
+    </script>
+    <style>
+        /* Specific Styles for Upload */
+        .drop-zone {
+            border: 2px dashed var(--glass-border);
+            border-radius: 12px;
+            padding: 3rem;
+            margin: 2rem 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.active {
+            border-color: var(--secondary-accent);
+            background: rgba(0, 210, 255, 0.05);
+        }
+
+        .file-name {
+            color: var(--secondary-accent);
+            font-family: var(--font-code);
+            margin-top: 1rem;
+        }
+
+        .log-entry {
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 2px solid var(--glass-border);
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .log-entry:hover {
+            border-left-color: var(--secondary-accent);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .log-date {
+            font-family: var(--font-code);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .log-score {
+            font-weight: bold;
+        }
+
+        .log-score.good {
+            color: var(--success-green);
+        }
+
+        .log-score.avg {
+            color: var(--text-dim);
+        }
+
+        .log-link {
+            color: var(--secondary-accent);
+            font-size: 0.8rem;
+            text-decoration: none;
+            display: block;
+            margin-top: 0.5rem;
+        }
+
+        .mt-4 {
+            margin-top: 2rem;
+        }
+
+        .skill-tag {
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid var(--secondary-accent);
+            color: var(--secondary-accent);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: var(--font-code);
+            animation: zoomIn 0.3s forwards;
+            opacity: 0;
+        }
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Persona Styles */
+        .persona-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+        }
+
+        .persona-card {
+            display: flex;
+            flex-direction: column;
+            /* Stack icon and text */
+            align-items: center;
+            text-align: center;
+            gap: 10px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .persona-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .persona-card.active {
+            background: rgba(0, 210, 255, 0.1);
+            border-color: var(--secondary-accent);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .p-icon {
+            font-size: 2.5rem;
+            margin-bottom: 5px;
+            filter: grayscale(1);
+            transition: filter 0.3s;
+        }
+
+        .persona-card.active .p-icon,
+        .persona-card:hover .p-icon {
+            filter: grayscale(0);
+        }
+
+        .p-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--text-bright);
+        }
+
+        .p-desc {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+    </style>
+</body>
+
+</html>

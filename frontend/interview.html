@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Session | Command Center</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/voice.css">
+</head>
+
+<body class="command-center-body">
+    <!-- Dynamic Background -->
+    <div class="ambient-bg"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="hud-container">
+        <!-- TOP BAR: Status & Timer -->
+        <header class="hud-header glass-panel">
+            <div class="logo-area">
+                <span class="status-dot online"></span>
+                <span class="system-text">AI INTERVIEW SYSTEM <span class="version">v2.0</span></span>
+            </div>
+            <div class="session-info">
+                <div class="progress-tracker">
+                    <span class="label">PROGRESS</span>
+                    <div class="progress-bar-container">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <span id="question-counter" class="counter">01/10</span>
+                </div>
+                <div class="mode-indicator">
+                    <span class="highlight">LIVE</span> SESSION
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN STAGE: Split View -->
+        <main class="hud-main">
+            <!-- LEFT: The Interviewer (AI Representation) -->
+            <section class="interviewer-stage">
+                <div class="avatar-container animate-float">
+                    <!-- Central Visualizer -->
+                    <div class="visualizer-circle" id="visualizer-circle">
+                        <div class="wave wave-1"></div>
+                        <div class="wave wave-2"></div>
+                        <div class="wave wave-3"></div>
+                        <div class="core-circle"></div>
+                    </div>
+                    <div class="status-message" id="interviewer-status">Listening...</div>
+                </div>
+
+                <!-- Feedback / System Logs Overlay -->
+                <div id="system-logs" class="system-logs glass-panel-sm" style="display: none;">
+                    <div class="log-header">/// SYSTEM LOGS</div>
+                    <div id="log-content" class="log-content">Initializing...</div>
+                </div>
+            </section>
+
+            <!-- RIGHT: Interaction Zone -->
+            <section class="interaction-zone">
+                <!-- Question Card -->
+                <div class="question-card glass-panel animate-slide-in-right" id="question-container">
+                    <div class="card-header">
+                        <span id="question-difficulty" class="tag difficulty-tag">DIFFICULTY_NULL</span>
+                        <span id="question-skill" class="tag skill-tag">SKILL_NULL</span>
+                    </div>
+                    <h2 id="question-text" class="question-text typing-effect">Initializing Interface...</h2>
+                    <div id="code-container"
+                        style="display: none; margin-top: 15px; background: #1e1e1e; padding: 15px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: #d4d4d4; overflow-x: auto; border: 1px solid #333;">
+                        <pre><code id="question-code"></code></pre>
+                    </div>
+                </div>
+
+                <!-- Command Bar (New Bottom Layout) -->
+                <div class="command-bar glass-panel-dark">
+                    <!-- Text Input Area (Auto-expanding) -->
+                    <div class="input-area">
+                        <textarea id="answer-input" placeholder="Type your answer here..." rows="1"></textarea>
+                        <span id="char-counter" class="char-count">0 / 2000</span>
+                    </div>
+
+                    <!-- Controls Row -->
+                    <div class="controls-row">
+                        <!-- Left: Status/Visuals (Empty for balance or secondary controls) -->
+                        <div class="controls-left"></div>
+
+                        <!-- Center: Primary Voice Control -->
+                        <div class="controls-center">
+                            <button id="mic-btn" class="mic-commander" title="Toggle Microphone"
+                                onclick="voiceManager.toggleListening()">
+                                <div class="mic-icon">
+                                    <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor"
+                                        stroke-width="2" fill="none">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                                    </svg>
+                                </div>
+                                <div class="mic-label">PUSH TO TALK</div>
+                            </button>
+                        </div>
+
+                        <!-- Right: Actions -->
+                        <div class="controls-right">
+                            <button id="submit-btn" class="action-btn success-glow" onclick="submitAnswer()">
+                                <span>SUBMIT ANSWER</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                            <button id="next-btn" class="action-btn next-glow" onclick="nextQuestion()"
+                                style="display: none;">
+                                <span>NEXT MODULE</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    <polyline points="12 5 19 12 12 19"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- MESSAGE TOAST -->
+        <div id="message" class="system-toast"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/main.js"></script>
+    <script src="js/voice.js"></script>
+    <script>
+        // ==================== INITIALIZATION ====================
+        // Global State
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id') || localStorage.getItem('session_id');
+        let currentQuestion = null;
+        let questionCount = 0;
+        let totalQuestions = 10; // Default, updated by API
+
+        // Init
+        // Init
+        async function initializeInterview() {
+            const statusEl = document.getElementById('question-text');
+            statusEl.innerText = "Connecting to Core...";
+
+            if (!sessionId) {
+                statusEl.innerText = "Error: Invalid Session. Redirecting...";
+                setTimeout(() => window.location.href = 'upload_resume.html', 2000);
+                return;
+            }
+
+            try {
+                statusEl.innerText = "Fetching Module 01...";
+                await fetchNextQuestion();
+            } catch (e) {
+                console.error("Init failed", e);
+                statusEl.innerText = "System Failure: " + e.message;
+                statusEl.classList.add('error-text'); // Ensure this class exists or it will just be plain
+            }
+        }
+
+        async function fetchNextQuestion() {
+            const statusEl = document.getElementById('question-text');
+            try {
+                console.log("Fetching question for session:", sessionId);
+
+                const response = await fetch(`${API_BASE_URL}/interview/next-question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (data.question) {
+                    currentQuestion = data.question;
+                    questionCount++;
+                    displayQuestion();
+                } else {
+                    // No more questions -> Results
+                    statusEl.innerText = "Session Complete. Processing...";
+                    window.location.href = `result.html?session_id=${sessionId}`;
+                }
+            } catch (e) {
+                console.error("Fetch error", e);
+                statusEl.innerText = "Network Error: " + e.message;
+                showToast("Connection Lost", "error");
+            }
+        }
+
+        // ==================== UI CONTROLLERS ====================
+
+        function updateProgress() {
+            const progress = ((questionCount) / totalQuestions) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+            document.getElementById('question-counter').innerText =
+                `${String(questionCount).padStart(2, '0')}/${String(totalQuestions).padStart(2, '0')}`;
+        }
+
+        function displayQuestion() {
+            if (!currentQuestion) return;
+
+            // Update Progress UI
+            // We might not know EXACT total if dynamic, but let's assume 10 for now or fetch from session info if available
+            // For simplicity, we just show current #
+            const progress = (questionCount / totalQuestions) * 100;
+            document.getElementById('progress-fill').style.width = `${progress}%`;
+            document.getElementById('question-counter').innerText =
+                `${String(questionCount).padStart(2, '0')}/${String(totalQuestions).padStart(2, '0')}`;
+
+            // Text Animations
+            const qText = document.getElementById('question-text');
+            qText.innerText = currentQuestion.question_text || "Error loading text";
+
+            // Code Snippet Handling
+            const codeContainer = document.getElementById('code-container');
+            const codeBlock = document.getElementById('question-code');
+
+            if (currentQuestion.code_snippet) {
+                codeContainer.style.display = 'block';
+                codeBlock.innerText = currentQuestion.code_snippet;
+            } else {
+                codeContainer.style.display = 'none';
+                codeBlock.innerText = '';
+            }
+
+            // ... (rest of display logic handled by existing element updates, ensures currentQuestion is used)
+
+            // Tags
+            const diffTag = document.getElementById('question-difficulty');
+            diffTag.innerText = (currentQuestion.difficulty || 'Normal').toUpperCase();
+            diffTag.className = `tag difficulty-tag ${currentQuestion.difficulty?.toLowerCase() || 'medium'}`;
+
+            document.getElementById('question-skill').innerText = (currentQuestion.skill_name || 'General').toUpperCase();
+
+            // Reset Input
+            const input = document.getElementById('answer-input');
+            input.value = '';
+            input.disabled = false;
+            input.focus();
+
+            // Buttons
+            // Buttons
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.style.display = 'flex';
+            submitBtn.innerHTML = 'INITIALIZE SUBMIT <span class="arrow">→</span>';
+            submitBtn.disabled = false;
+
+            document.getElementById('next-btn').style.display = 'none';
+
+            updateProgress();
+
+            // Voice Trigger
+            if (window.voiceManager && !currentQuestion.question_type === 'coding') {
+                // Speak unless it's a coding question (optional preference)
+                setTimeout(() => window.voiceManager.speak(currentQuestion.question_text), 500);
+            } else if (window.voiceManager && currentQuestion.question_type !== 'coding') {
+                setTimeout(() => window.voiceManager.speak(currentQuestion.question_text), 500);
+            }
+
+            // === CODE EDITOR MODE CHECK ===
+            const inputArea = document.querySelector('.input-area');
+            const isCoding = currentQuestion.question_type === 'coding';
+            const isOutputGuess = currentQuestion.question_type === 'output_guess';
+
+            if (isCoding || isOutputGuess) {
+                // Formatting for Coding
+                input.classList.add('code-editor');
+                inputArea.classList.add('code-mode');
+
+                if (isCoding) {
+                    input.placeholder = "def solution():\n    # Write your solution here...";
+                } else {
+                    input.placeholder = "Type the exact output here...";
+                }
+
+                // Add specific coding tag if not already handled by generic logic
+                const skillTag = document.getElementById('question-skill');
+                skillTag.innerText = isCoding ? "CODING CHALLENGE" : "OUTPUT PREDICTION";
+                skillTag.className = "tag coding-tag";
+
+                // Disable voice auto-listen?
+                if (window.voiceManager) window.voiceManager.stopListening();
+
+            } else {
+                // Reset to Normal
+                input.classList.remove('code-editor');
+                inputArea.classList.remove('code-mode');
+                input.placeholder = "Type your answer here...";
+                // Skill tag reset is handled above by generic logic (skill_name)
+                // But we overrode it for coding, so generic logic above works fine
+                // as long as this runs AFTER generic logic.
+                // Re-apply generic skill tag if needed?
+                // Actually the generic logic sets it to `currentQuestion.skill_name`.
+                // If we want "Coding Challenge" label, we should override it here.
+            }
+        }
+
+        async function submitAnswer() {
+            // STOP RECORDING IMMEDIATELY
+            if (window.voiceManager) window.voiceManager.stopListening();
+
+            const answerInput = document.getElementById('answer-input');
+            const answer = answerInput.value.trim();
+
+            if (!answer) {
+                showToast("INPUT REQUIRED", "error");
+                return;
+            }
+
+            // UI Loading State
+            const btn = document.getElementById('submit-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'PROCESSING...';
+            btn.disabled = true;
+
+            try {
+                // API Call
+                const response = await fetch(`${API_BASE_URL}/interview/submit-answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        question_id: currentQuestion.id,
+                        user_answer: answer
+                    })
+                });
+
+                if (!response.ok) throw new Error('Submission failed');
+
+                // Success State
+                showToast("ANSWER LOGGED", "success");
+
+                // Show Next Button
+                btn.style.display = 'none';
+                const nextBtn = document.getElementById('next-btn');
+                nextBtn.style.display = 'flex';
+                nextBtn.onclick = () => {
+                    fetchNextQuestion(); // Fetch next dynamic question
+                };
+
+                answerInput.disabled = true;
+
+            } catch (e) {
+                console.error(e);
+                showToast("SYSTEM ERROR: " + e.message, "error");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+
+
+        // Old local iteration is replaced by fetchNextQuestion()
+        // function nextQuestion() { ... } removed
+
+
+        // ==================== UTILS ====================
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('message');
+            toast.innerText = msg;
+            toast.className = `system-toast show ${type}`;
+            setTimeout(() => toast.className = 'system-toast', 3000);
+        }
+
+        // Input Monitor
+        document.getElementById('answer-input').addEventListener('input', (e) => {
+            const len = e.target.value.length;
+            document.getElementById('char-counter').innerText = `${len} / 2000`;
+        });
+
+        // Initialize
+        // Dummy data for dev if localstorage empty
+        // Initialize
+        // questions check removed (deprecated)
+
+
+        displayQuestion();
+
+        // Start the engine
+        initializeInterview();
+    </script>
+</body>
+
+</html>

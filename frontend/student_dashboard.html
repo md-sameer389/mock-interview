@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal | Placement Cell</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        /* Student specific overrides */
+        .drive-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: transform 0.2s;
+        }
+
+        .drive-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .drive-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+
+        .company-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .role-name {
+            font-size: 1rem;
+            color: var(--text-bright);
+            margin-bottom: 8px;
+        }
+
+        .drive-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 15px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-upcoming {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+
+        .status-open {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+
+        .status-completed {
+            background: rgba(149, 165, 166, 0.2);
+            color: #95a5a6;
+        }
+
+        .btn-apply {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+        }
+
+        .btn-apply:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>T&P CELL</h2>
+                <span>STUDENT PORTAL</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" onclick="showSection('dashboard', this)">Dashboard</a>
+                <a href="upload_resume.html" class="nav-item">Take Interview</a>
+                <a href="#" class="nav-item" onclick="showSection('history', this)">My History</a>
+            </nav>
+            <div class="user-profile">
+                <div class="avatar" id="user-avatar">S</div>
+                <div class="user-info">
+                    <span class="name" id="user-name">Student</span>
+                    <span class="role">Candidate</span>
+                </div>
+            </div>
+            <div style="padding: 20px;">
+                <button onclick="logout()"
+                    style="width: 100%; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); border-radius: 6px; cursor: pointer;">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <h1 id="page-title">Dashboard</h1>
+                <div class="date-display" id="current-date">--/--/----</div>
+            </header>
+
+            <!-- VIEW: DASHBOARD -->
+            <section id="view-dashboard" class="view-section">
+                <!-- Stats -->
+                <section class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Interviews Taken</h3>
+                            <p class="stat-value" id="stat-interviews">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-info">
+                            <h3>Avg. Score</h3>
+                            <p class="stat-value" id="stat-avg-score">0.0</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Skill Analysis Heatmap -->
+                <section class="skill-heatmap-section" style="margin-top: 30px;">
+                    <div class="glass-panel"
+                        style="padding: 20px; border-radius: 12px; background: rgba(255,255,255,0.03);">
+                        <h3 style="margin-bottom: 20px; color: var(--text-bright);">Skill Proficiency Analysis</h3>
+                        <div id="skill-heatmap-container"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">
+                            <!-- Populated by JS -->
+                            <div style="color: var(--text-dim);">No sufficient data for analysis yet.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="drives-section" style="margin-top: 30px;">
+                    <h2 style="margin-bottom: 20px;">Upcoming Placement Drives</h2>
+                    <div id="drives-list">
+                        <!-- Populated by JS -->
+                        <div style="text-align: center; color: var(--text-dim); padding: 20px;">Loading drives...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: HISTORY -->
+            <section id="view-history" class="view-section" style="display: none;">
+                <h2>My Interview History</h2>
+                <div class="table-container" style="margin-top: 20px;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Score/10</th>
+                                <th>Questions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/student_dashboard.js?v=5"></script>
+</body>
+
+</html>

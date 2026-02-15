@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results | Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/animations.css">
+</head>
+
+<body class="command-center-body">
+    <div class="ambient-bg"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="hud-container">
+        <!-- HEADER -->
+        <header class="hud-header glass-panel">
+            <div class="logo-area">
+                <span class="status-dot online"></span>
+                <span class="system-text">MISSION REPORT</span>
+            </div>
+            <a href="upload_resume.html" class="primary-btn" style="padding: 8px 16px; font-size: 0.8rem;">
+                NEW SESSION
+            </a>
+        </header>
+
+        <main class="hud-main vertical-layout">
+            <!-- TOP: Score Hero -->
+            <section class="score-hero">
+                <div class="glass-panel-minimal" style="text-align: center; padding: var(--space-lg);">
+                    <div class="score-ring-container"
+                        style="position: relative; width: 180px; height: 180px; margin: 0 auto;">
+                        <svg width="180" height="180" style="transform: rotate(-90deg);">
+                            <circle cx="90" cy="90" r="80" fill="none" stroke="var(--glass-border)" stroke-width="8">
+                            </circle>
+                            <circle id="score-ring" cx="90" cy="90" r="80" fill="none" stroke="var(--primary-accent)"
+                                stroke-width="8" stroke-dasharray="502" stroke-dashoffset="502"
+                                style="transition: stroke-dashoffset 2s ease-out;"></circle>
+                        </svg>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                            <div class="system-text" style="font-size: 2.5rem; color: var(--text-main);"
+                                id="final-score">0.0</div>
+                            <div class="system-text" style="font-size: 0.7rem; color: var(--text-dim);">PERFORMANCE
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <div id="feedback-rating" class="tag"
+                            style="font-size: 1.2rem; background: rgba(255,255,255,0.05);">ANALYZING...</div>
+                    </div>
+
+                    <!-- Skill Breakdown -->
+                    <div id="skill-stats" class="skill-breakdown" style="display:none; text-align: left;">
+                        <div class="system-text" style="margin-bottom: 10px; color: var(--primary-accent);">SKILL
+                            ANALYSIS</div>
+                        <div id="skill-bars-container"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CENTER: Detailed Results Feed -->
+            <section class="results-feed">
+                <div class="feed-header">
+                    <span class="system-text">/// MISSION_LOG</span>
+                </div>
+                <div id="answers-list" class="scrollable-feed">
+                    <div class="loading-spinner"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Confetti -->
+    <div id="confetti"
+        style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 99;"></div>
+
+    <script src="js/main.js"></script>
+    <script>
+        const sessionId = new URLSearchParams(window.location.search).get('session_id');
+        if (!sessionId) window.location.href = 'upload_resume.html';
+
+        async function loadResults() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/interview/results/${sessionId}`);
+                if (!res.ok) throw new Error("Failed to load results");
+
+                const data = await res.json();
+
+                // Animate Score
+                const score = data.total_score;
+                const max = 10;
+                const offset = 565 - (565 * (score / max));
+                setTimeout(() => document.getElementById('score-ring').style.strokeDashoffset = offset, 500);
+                document.getElementById('final-score').innerText = score.toFixed(1);
+
+                // Rating
+                const ratingDiv = document.getElementById('feedback-rating');
+                if (score >= 8) { ratingDiv.innerText = "EXCELLENT"; ratingDiv.style.color = "var(--success-green)"; triggerConfetti(); }
+                else if (score >= 5) { ratingDiv.innerText = "SATISFACTORY"; ratingDiv.style.color = "var(--secondary-accent)"; }
+                else { ratingDiv.innerText = "NEEDS IMPROVEMENT"; ratingDiv.style.color = "var(--error-red)"; }
+
+                // Skill Breakdown
+                if (data.skill_breakdown && data.skill_breakdown.length > 0) {
+                    const skillContainer = document.getElementById('skill-stats');
+                    const barsContainer = document.getElementById('skill-bars-container');
+                    skillContainer.style.display = 'block';
+
+                    barsContainer.innerHTML = data.skill_breakdown.map(s => {
+                        const pct = (s.score / 10) * 100;
+                        let colorClass = 'low';
+                        if (s.score >= 8) colorClass = 'high';
+                        else if (s.score >= 5) colorClass = 'med';
+
+                        return `
+                        <div class="skill-item">
+                            <div class="skill-header">
+                                <span>${s.skill}</span>
+                                <span>${s.score}/10</span>
+                            </div>
+                            <div class="skill-track">
+                                <div class="skill-fill ${colorClass}" style="width: ${pct}%"></div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                // List
+                const list = document.getElementById('answers-list');
+                list.innerHTML = data.answers.map((a, i) => `
+                    <div class="result-card animate-slide-in-right" style="animation-delay: ${i * 0.1}s">
+                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span class="system-text" style="color: var(--secondary-accent); font-size: 0.8rem;">Q${i + 1}</span>
+                            <div class="tag">${a.difficulty}</div>
+                        </div>
+                        <div class="question-text" style="font-size: 1.1rem; margin-bottom: 0.5rem;">${a.question_text}</div>
+                        <div class="answer-box">
+                            <div style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 0.5rem;">USER INPUT:</div>
+                            <div style="color: var(--text-main);">${a.user_answer}</div>
+                        </div>
+                        <div style="margin-top: 1rem; font-size: 0.9rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                             <div style="color: var(--text-dim); margin-bottom: 0.5rem; font-weight: bold;">EVALUATION REPORT:</div>
+                             <div style="white-space: pre-wrap; line-height: 1.5; color: ${a.score >= 5 ? 'var(--text-main)' : 'var(--error-red)'}">${a.feedback}</div>
+                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem;">
+                                 <button onclick="reportIssue(sessionId, ${a.question_id})" class="report-btn">⚠ REPORT ISSUE</button>
+                                 <div style="text-align: right; color: var(--secondary-accent); font-weight: bold;">SCORE: ${a.score}/10</div>
+                             </div>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function triggerConfetti() {
+            // Simple JS confetti could go here, omitting for brevity/performance
+        }
+
+        async function reportIssue(sessId, qId) {
+            const reason = prompt("Why is this grading incorrect? (e.g. 'Key concept was missed')");
+            if (!reason) return;
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/flag_answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessId, question_id: qId, reason: reason })
+                });
+
+                if (res.ok) alert("Report submitted to Admin for review. Only 1 report per answer allowed.");
+                else alert("Error submitting report (or already reported).");
+            } catch (e) {
+                console.error(e);
+                alert("Network error.");
+            }
+        }
+
+        loadResults();
+    </script>
+    <style>
+        .result-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+        }
+
+        .answer-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-left: 2px solid var(--primary-accent);
+        }
+
+        .report-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            color: rgba(255, 100, 100, 0.7);
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .report-btn:hover {
+            background: rgba(255, 100, 100, 0.1);
+            border-color: rgba(255, 100, 100, 0.8);
+            color: rgba(255, 100, 100, 1);
+        }
+    </style>
+</body>
+
+</html>
