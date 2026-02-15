@@ -9,7 +9,13 @@ from routes.admin_routes import admin_bp
 from routes.student_routes import student_bp
 from config import SECRET_KEY
 
-app = Flask(__name__, static_folder='../frontend', static_url_path='')
+# Handle paths relative to the root folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
+app = Flask(__name__, 
+            static_folder=os.path.join(ROOT_DIR, 'frontend'), 
+            static_url_path='')
 app.secret_key = SECRET_KEY
 
 # Auto-initialize database if it doesn't exist
@@ -23,8 +29,8 @@ def init_db_if_missing():
         print("Database not found. Initializing...")
         try:
             import sqlite3
-            schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'schema.sql')
-            seed_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'seed_questions.sql')
+            schema_path = os.path.join(ROOT_DIR, 'database', 'schema.sql')
+            seed_path = os.path.join(ROOT_DIR, 'database', 'seed_questions.sql')
             
             conn = sqlite3.connect(DATABASE_PATH)
             with open(schema_path, 'r') as f:
