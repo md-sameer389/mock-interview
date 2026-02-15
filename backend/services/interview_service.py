@@ -260,13 +260,10 @@ def get_next_question(session_id, current_skills=None):
             params_fallback = list(answered_ids) + list(skills)
             question = conn.execute(query_fallback, params_fallback).fetchone()
             
-        # Fallback 2: Any unanswered question (last resort)
-        if not question:
-             logger.debug("Fallback to ANY question.")
-             # Only show coding if test cases exist -> CHANGED: NO CODING
-             query_any = f"SELECT * FROM questions WHERE id NOT IN ({placeholders}) AND question_type != 'coding' LIMIT 1"
-             question = conn.execute(query_any, list(answered_ids)).fetchone()
-             
+        # Fallback 2: Any unanswered question (REMOVED)
+        # We no longer fall back to random questions to ensure relevance to the resume.
+        # If no question is found for the extracted skills, the interview naturally ends.
+        
         conn.close()
         
         if question:
