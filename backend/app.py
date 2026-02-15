@@ -1,7 +1,14 @@
 import os
+import sys
 import logging
 from flask import Flask
 from flask_cors import CORS
+
+# Fix for Render imports
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
 from routes.auth_routes import auth_bp
 from routes.resume_routes import resume_bp
 from routes.interview_routes import interview_bp
