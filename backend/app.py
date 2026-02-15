@@ -64,7 +64,35 @@ def init_db_if_missing():
             print(f"Error initializing database: {e}")
 
 # Run init check
+def ensure_admin_exists():
+    from config import DATABASE_PATH
+    import sqlite3
+    import bcrypt
+    
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        
+        # Check if admin exists
+        admin = conn.execute("SELECT id FROM users WHERE email = ?", ("admin@mock.com",)).fetchone()
+        
+        if not admin:
+            print("Admin user missing. Creating admin account...")
+            def hash_pw(pw):
+                return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            admin_pw_hash = hash_pw('admin123')
+            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+                         ("Admin User", "admin@mock.com", admin_pw_hash, "admin"))
+            conn.commit()
+            print("Admin account created successfully.")
+        
+        conn.close()
+    except Exception as e:
+        print(f"Error ensuring admin exists: {e}")
+
 init_db_if_missing()
+ensure_admin_exists()
 
 # Configure logging
 logging.basicConfig(
