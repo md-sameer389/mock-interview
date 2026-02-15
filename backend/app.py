@@ -12,6 +12,36 @@ from config import SECRET_KEY
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 app.secret_key = SECRET_KEY
 
+# Auto-initialize database if it doesn't exist
+def init_db_if_missing():
+    from config import DATABASE_PATH
+    db_dir = os.path.dirname(DATABASE_PATH)
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+    
+    if not os.path.exists(DATABASE_PATH):
+        print("Database not found. Initializing...")
+        try:
+            import sqlite3
+            schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'schema.sql')
+            seed_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'seed_questions.sql')
+            
+            conn = sqlite3.connect(DATABASE_PATH)
+            with open(schema_path, 'r') as f:
+                conn.executescript(f.read())
+            
+            if os.path.exists(seed_path):
+                with open(seed_path, 'r') as f:
+                    conn.executescript(f.read())
+            
+            conn.close()
+            print("Database initialized successfully.")
+        except Exception as e:
+            print(f"Error initializing database: {e}")
+
+# Run init check
+init_db_if_missing()
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
