@@ -1,4 +1,8 @@
 import os
+import sys
+# Ensure the backend directory is in the Python path for Gunicorn
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import logging
 from flask import Flask
 from flask_cors import CORS
