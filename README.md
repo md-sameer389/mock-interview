@@ -18,13 +18,12 @@ The **Mock Interview Platform** is a full-stack web application designed to help
 *   **Frontend:** Vanilla HTML5, CSS3 (Custom Glassmorphism Design System), JavaScript.
 *   **Backend:** Python 3, Flask, Gunicorn.
 *   **Database:** SQLite3 (`interview.db`).
-*   **AI Integration:** Google Gemini API for dynamic question generation and conversational context.
+*   **AI Engine:** Custom local heuristic and Natural Language Processing (NLP) rules for question generation and concept-based grading (no external API keys required).
 
 ## 💻 Running Locally
 
 ### Prerequisites
 *   Python 3.10+
-*   A Google Gemini API Key
 
 ### Setup
 1. Clone the repository:
@@ -38,7 +37,6 @@ The **Mock Interview Platform** is a full-stack web application designed to help
    ```
 3. Set your environment variables (e.g., in a `.env` file):
    ```
-   GEMINI_API_KEY=your_api_key_here
    FLASK_SECRET_KEY=your_secret_key
    ```
 
