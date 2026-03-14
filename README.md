@@ -37,7 +37,7 @@ The **Mock Interview Platform** is a full-stack web application designed to help
    ```
 3. Set your environment variables (e.g., in a `.env` file):
    ```
-   FLASK_SECRET_KEY=your_secret_key
+   SECRET_KEY=your_secret_key
    ```
 
 ### Execution
