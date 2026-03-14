@@ -1,0 +1,11 @@
+Question                                        OLD   NEW     T     C  Result
+=====================================================================================
+Q3 Set output (was 1.8)                         1.8   7.2   7.0   8.0  IMPROVED
+Q5 2nd highest salary (was 1.6)                 1.6   2.2   2.8   1.0  IMPROVED
+Q4 Polymorphism (was 3.5)                       3.5   6.4   8.5   2.6  IMPROVED
+Q1 Introduce myself (was 4.2)                   4.2   5.2   4.2   7.2  IMPROVED
+Q6 TCP vs UDP (was 6.4)                         6.4   7.0   8.5   4.2  IMPROVED
+Q12 Overfitting (was 1.6)                       1.6   4.4   5.7   2.0  IMPROVED
+Q13 Hash index (was 4.2)                        4.2   4.6   5.7   2.6  SAME
+
+Done.

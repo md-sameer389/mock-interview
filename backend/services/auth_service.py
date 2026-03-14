@@ -40,8 +40,6 @@ def token_required(f):
         return f(current_user_id, *args, **kwargs)
     
     return decorated
-    
-    return decorated
 
 def register_user(full_name, email, password):
     # Validate inputs

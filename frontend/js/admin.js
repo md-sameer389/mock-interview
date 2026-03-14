@@ -1,4 +1,6 @@
-const ADMIN_API_BASE = '/api/admin';
+// Ensure API_BASE_URL is defined (fallback if main.js issue)
+const BASE_URL = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+const ADMIN_API_BASE = `${BASE_URL}/api/admin`;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Ensure Auth
@@ -45,6 +47,8 @@ function refreshCurrentView() {
         loadDrives();
     } else if (currentView === 'view-reports') {
         loadReports();
+    } else if (currentView === 'view-questions') {
+        loadQuestions();
     } else if (currentView === 'view-settings') {
         // No data load needed for now
     }
@@ -278,7 +282,10 @@ async function loadStudents() {
                     <td>${s.total_sessions}</td>
                     <td>${s.avg_score}</td>
                     <td>${s.last_active ? new Date(s.last_active).toLocaleDateString() : '-'}</td>
-                    <td><button class="btn-refresh" style="padding: 4px 8px; font-size: 0.8rem;" onclick="viewStudent(${s.id})">Details</button></td>
+                    <td>
+                        <button class="btn-refresh" style="padding: 4px 8px; font-size: 0.8rem;" onclick="viewStudent(${s.id})">Details</button>
+                        <button class="btn-refresh" style="padding: 4px 8px; font-size: 0.8rem; background: rgba(255,0,0,0.1); color: #ff4757; border-color: #ff4757; margin-left: 5px;" onclick="deleteStudent(${s.id})">Delete</button>
+                    </td>
                 </tr>
             `;
             tableBody.innerHTML += row;
@@ -287,6 +294,26 @@ async function loadStudents() {
     } catch (e) {
         console.error("Error in loadStudents:", e);
         tableBody.innerHTML = '<tr><td colspan="6" style="color:red">Error loading students: ' + e.message + '</td></tr>';
+    }
+}
+
+async function deleteStudent(id) {
+    if (!confirm("Are you sure you want to delete this student and ALL their data? This cannot be undone.")) return;
+
+    try {
+        const response = await fetch(`${ADMIN_API_BASE}/students/${id}`, { method: 'DELETE' });
+
+        if (response.ok) {
+            // alert("Student deleted successfully");
+            loadStudents(); // Refresh to show updated list
+            loadStats(); // Refresh stats as well since candidate count changed
+        } else {
+            const data = await response.json();
+            alert("Failed to delete student: " + (data.error || "Unknown error"));
+        }
+    } catch (e) {
+        console.error("Delete Error:", e);
+        alert("Error deleting student: " + e.message);
     }
 }
 
@@ -406,15 +433,15 @@ function openReportModal(index) {
         </div>
         <div style="margin-bottom: 15px;">
             <div style="font-size: 0.8rem; color: var(--text-dim);">Question</div>
-            <div>${r.question_text}</div>
+            <div>${formatQText(r.question_text)}</div>
         </div>
         <div style="margin-bottom: 15px;">
             <div style="font-size: 0.8rem; color: var(--text-dim);">User Answer</div>
-            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">${r.user_answer}</div>
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">${formatQText(r.user_answer)}</div>
         </div>
         <div style="margin-bottom: 15px;">
             <div style="font-size: 0.8rem; color: var(--text-dim);">AI Feedback</div>
-            <div style="font-size: 0.9rem;">${r.feedback}</div>
+            <div style="font-size: 0.9rem;">${formatQText(r.feedback)}</div>
         </div>
         <div style="margin-bottom: 15px;">
             <div style="font-size: 0.8rem; color: var(--text-dim);">Score</div>
@@ -431,8 +458,9 @@ function closeReportModal() {
 
 async function loadStats() {
     try {
+        console.log(`Fetching stats from: ${ADMIN_API_BASE}/stats`);
         const response = await fetch(`${ADMIN_API_BASE}/stats`);
-        if (!response.ok) throw new Error("Failed to fetch stats");
+        if (!response.ok) throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`);
 
         const data = await response.json();
 
@@ -492,6 +520,18 @@ async function loadActivity() {
     }
 }
 
+// Utility: Escape HTML and convert \n to <br> for safe multi-line display
+function formatQText(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\\n/g, '<br>')
+        .replace(/\n/g, '<br>');
+}
+
 // Utility: Number Animation
 function animateValue(id, start, end, duration) {
     if (start === end) return;
@@ -508,4 +548,179 @@ function animateValue(id, start, end, duration) {
             clearInterval(timer);
         }
     }, stepTime);
+}
+// --- Question Management ---
+
+let allQuestions = []; // Store locally for sorting
+
+async function loadQuestions() {
+    const tableBody = document.getElementById('questions-table-body');
+    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Loading questions...</td></tr>';
+
+    try {
+        const response = await fetch(`${ADMIN_API_BASE}/questions`, {
+            headers: { 'Authorization': localStorage.getItem('token') }
+        });
+        if (!response.ok) throw new Error("Failed to load questions");
+        const data = await response.json();
+
+        allQuestions = data.questions; // Store
+
+        // Populate Skills Dropdown
+        const skillSelect = document.getElementById('q-skill');
+        skillSelect.innerHTML = '';
+        data.skills.forEach(s => {
+            skillSelect.innerHTML += `<option value="${s.id}">${s.skill_name}</option>`;
+        });
+
+        renderQuestionsTable();
+
+    } catch (e) {
+        console.error(e);
+        tableBody.innerHTML = `<tr><td colspan="5" style="color:red">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function handleSortQuestions() {
+    renderQuestionsTable();
+}
+
+function renderQuestionsTable() {
+    const tableBody = document.getElementById('questions-table-body');
+    const sortType = document.getElementById('q-sort').value;
+
+    let displayQuestions = [...allQuestions];
+
+    // Sort Logic
+    if (sortType === 'difficulty') {
+        const diffOrder = { 'Easy': 1, 'Medium': 2, 'Hard': 3 };
+        displayQuestions.sort((a, b) => (diffOrder[a.difficulty] || 2) - (diffOrder[b.difficulty] || 2));
+    } else if (sortType === 'skill') {
+        displayQuestions.sort((a, b) => a.skill_name.localeCompare(b.skill_name));
+    } else {
+        // Newest (Default ID desc)
+        displayQuestions.sort((a, b) => b.id - a.id);
+    }
+
+    tableBody.innerHTML = '';
+    if (displayQuestions.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5">No questions found.</td></tr>';
+        return;
+    }
+
+    displayQuestions.forEach(q => {
+        const qData = encodeURIComponent(JSON.stringify(q));
+        const row = `
+            <tr>
+                <td>${q.id}</td>
+                <td>${q.question_text.substring(0, 60)}...</td>
+                <td>${q.skill_name}</td>
+                <td><span class="status-badge" style="color: ${getDiffColor(q.difficulty)}">${q.difficulty}</span></td>
+                <td>
+                    <button class="btn-refresh" style="padding: 4px 8px;" onclick="openQuestionModal('${qData}')">Edit</button>
+                    <button class="btn-refresh" style="padding: 4px 8px; margin-left:5px; color:#ff4757; border-color:#ff4757; background:rgba(255,0,0,0.1);" onclick="deleteQuestion(${q.id})">Del</button>
+                </td>
+            </tr>
+        `;
+        tableBody.innerHTML += row;
+    });
+}
+
+
+function getDiffColor(diff) {
+    if (diff === 'Easy') return '#4cd137';
+    if (diff === 'Medium') return '#fbc531';
+    return '#ff4757';
+}
+
+function openQuestionModal(qData = null) {
+    const modal = document.getElementById('question-modal');
+    modal.style.display = 'flex';
+
+    if (qData) {
+        // Edit Mode
+        const q = JSON.parse(decodeURIComponent(qData));
+        document.getElementById('question-modal-title').innerText = "Edit Question";
+        document.getElementById('q-id').value = q.id;
+        document.getElementById('q-text').value = q.question_text;
+        document.getElementById('q-difficulty').value = q.difficulty;
+        document.getElementById('q-topic').value = q.topic || '';
+        document.getElementById('q-keywords').value = q.expected_keywords || '';
+
+        const options = document.getElementById('q-skill').options;
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].text === q.skill_name) {
+                options[i].selected = true;
+                break;
+            }
+        }
+    } else {
+        // Add Mode
+        document.getElementById('question-modal-title').innerText = "Add Question";
+        document.getElementById('question-form').reset();
+        document.getElementById('q-id').value = '';
+    }
+}
+
+function closeQuestionModal() {
+    document.getElementById('question-modal').style.display = 'none';
+}
+
+async function handleSaveQuestion(e) {
+    e.preventDefault();
+    const id = document.getElementById('q-id').value;
+    const isEdit = !!id;
+
+    const data = {
+        question_text: document.getElementById('q-text').value,
+        skill_id: document.getElementById('q-skill').value,
+        difficulty: document.getElementById('q-difficulty').value,
+        topic: document.getElementById('q-topic').value,
+        expected_keywords: document.getElementById('q-keywords').value
+    };
+
+    const url = isEdit ? `${ADMIN_API_BASE}/questions/${id}` : `${ADMIN_API_BASE}/questions`;
+    const method = isEdit ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('token')
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            closeQuestionModal();
+            loadQuestions();
+            alert(isEdit ? "Question updated" : "Question created");
+        } else {
+            const err = await response.json();
+            alert("Error: " + err.error);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Request failed");
+    }
+}
+
+async function deleteQuestion(id) {
+    if (!confirm("Delete this question?")) return;
+
+    try {
+        const response = await fetch(`${ADMIN_API_BASE}/questions/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': localStorage.getItem('token') }
+        });
+
+        if (response.ok) {
+            loadQuestions();
+        } else {
+            alert("Failed to delete");
+        }
+    } catch (e) {
+        alert("Error deleting");
+    }
 }

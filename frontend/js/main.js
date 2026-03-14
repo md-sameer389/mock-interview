@@ -3,7 +3,7 @@
  * Handles global utilities, animations, and shared logic
  */
 
-const API_BASE_URL = ''; // Relative path for deployment
+const API_BASE_URL = 'http://127.0.0.1:5000'; // Local backend URL
 
 // ==================== AUTH INTERCEPTOR ====================
 const originalFetch = window.fetch;

@@ -6,7 +6,7 @@ from models.question_model import get_questions_by_skills, get_question_by_id, c
 from models.session_model import (
     create_session, save_answer, update_session_score, 
     complete_session, get_session_results, get_user_history,
-    get_answered_questions
+    get_answered_questions, get_globally_seen_questions
 )
 from utils.skill_extractor import extract_skills_from_text
 from utils.evaluator import evaluate_answer
@@ -34,82 +34,46 @@ def start_interview(user_id, resume_id, persona='standard'):
             skills = ['General']
             
         # 1. Generate Dynamic Questions (Heuristic) based on Persona
-        # For HR, we might focus on soft skills even if resume has technical skills
-        dynamic_qs = generate_heuristic_questions(skills, count=3, persona=persona)
+        # DISABLING dynamic questions for now to ensure strict adherence to B.Tech pattern (Intro -> Core -> Hard)
+        # dynamic_qs = generate_heuristic_questions(skills, count=3, persona=persona)
         created_dynamic_ids = []
         
-        for dq in dynamic_qs:
-            q_id = create_dynamic_question(
-                dq['question_text'], 
-                dq['skill_name'], 
-                dq['difficulty'], 
-                dq['expected_keywords'],
-                dq['question_type']
-            )
-            if q_id:
-                created_dynamic_ids.append(q_id)
-                
         # 2. Get Standard Questions based on skills & persona
-        # Reduce limit since we have dynamic ones now
-        standard_limit = 7
-        
-        # PERSONA LOGIC FOR STANDARD QUESTIONS:
-        # We need to filter standard questions.
-        # Currently get_questions_by_skills returns ANY difficulty.
-        # We could filter them here or update the model.
-        # For simplicity, let's fetch more and filter in python.
-        
+        # Fetch 15 to match the specific B.Tech pattern
         raw_standard_questions = get_questions_by_skills(skills, limit=15)
         
         filtered_standard_questions = []
         if persona == 'technical':
-            # Prefer Hard/Medium (Exclude coding for now)
+            # Prefer Hard/Medium
             filtered_standard_questions = [
                 q for q in raw_standard_questions 
-                if (q['difficulty'] in ['Hard', 'Medium']) and q['question_type'] != 'coding'
+                if q['difficulty'] in ['Hard', 'Medium'] or q['question_type'] == 'coding'
             ]
         elif persona == 'hr':
-            # Prefer Behavioral if possible
-            # STRICTLY EXCLUDE CODING
+            # Prefer Behavioral if possible (though we might not have many labeled as such linked to tech skills)
+            # Or just Easy questions
             filtered_standard_questions = [
                 q for q in raw_standard_questions 
-                if (q['difficulty'] == 'Easy' or q['skill_id'] == 1) and q['question_type'] != 'coding'
+                if q['difficulty'] == 'Easy' or q['skill_id'] == 1 # Assuming 1 is General/Behavioral - unsafe assumption but acceptable for mvp
             ]
         else:
-            # exclude coding
-            filtered_standard_questions = [q for q in raw_standard_questions if q['question_type'] != 'coding'] 
- 
+            filtered_standard_questions = raw_standard_questions
+            
         # Fallback if filtering removed too many
-        # STRICTLY EXCLUDE CODING IN FALLBACK TOO
         if len(filtered_standard_questions) < 3:
-             filtered_standard_questions = [q for q in raw_standard_questions if q['question_type'] != 'coding']
+             filtered_standard_questions = raw_standard_questions
+
+        standard_questions = filtered_standard_questions
 
         # Cap it
-        standard_questions = filtered_standard_questions[:standard_limit]
-        
         if not standard_questions and not created_dynamic_ids:
              return jsonify({'error': 'No questions found for your skills'}), 404
 
         # Combine Questions
         final_questions_pool = []
-
-        # 0. ALWAYS START WITH: Introduce Yourself
-        # Check if it exists in DB, otherwise create dynamic/temporary one
-        # Ideally, we create a dynamic one to ensure it has an ID for tracking answers.
         
-        intro_q_id = create_dynamic_question(
-            "Tell me about yourself. Walk me through your background and your relevant experience.",
-            "Behavioral",
-            "Easy",
-            "experience,background,projects,skills,education",
-            "text"
-        )
-        if intro_q_id:
-            intro_q = get_question_by_id(intro_q_id)
-            if intro_q:
-                final_questions_pool.append(intro_q)
-
         # Add dynamic ones (high priority)
+        # Note: We are disabling dynamic generation mostly, but keeping logic
         for qid in created_dynamic_ids:
             q_obj = get_question_by_id(qid)
             if q_obj:
@@ -117,6 +81,9 @@ def start_interview(user_id, resume_id, persona='standard'):
         
         # Add standard ones
         final_questions_pool.extend(standard_questions)
+        
+        # Ensure we have at least 15 for the session count
+        # (Though get_next_question will enforce it dynamically)
         
         # Create session (save persona)
         # Note: create_session needs update to accept persona, or we do manual update
@@ -140,23 +107,14 @@ def start_interview(user_id, resume_id, persona='standard'):
         }), 200
     
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': f'Error starting interview: {str(e)}'}), 500
-
-    except Exception as e:
-        import traceback
-        with open('traceback.txt', 'w') as f:
-            traceback.print_exc(file=f)
-        # Close connection if open? (Handled by context usually but good practice)
-        if 'conn' in locals():
-            conn.close()
-        logger.error(f"Error in dynamic fetch: {str(e)}")
-        return None
 
 def get_next_question(session_id, current_skills=None):
     """
-    Get the next unanswered question dynamically based on performance (Adaptive Difficulty)
+    Get the next unanswered question based on PROGRESSIVE STAGES:
+    1. Warm-up (Q1-2): Easy / Intro
+    2. Core (Q3-10): Medium
+    3. Advanced (Q11-15): Hard
     """
     try:
         # 1. Check Session Status
@@ -167,116 +125,202 @@ def get_next_question(session_id, current_skills=None):
             conn.close()
             return None
             
-        # 2. Get Answered Question IDs
+        # 2. Get Answered Question IDs (current session)
         answered_ids = get_answered_questions(session_id)
+        count_answered = len(answered_ids)
+
+        # NO-REPEAT MODE: Exclude questions seen in ALL past sessions for this user
+        globally_seen_ids = get_globally_seen_questions(session['user_id'])
+        # Merge: union of current-session answered + all past sessions seen
+        # Use a set to deduplicate, convert back to list for SQL
+        excluded_ids = list(set(answered_ids) | set(globally_seen_ids))
+        
+        # HOTFIX: Force upgrade old sessions to 15 questions
+        if session['total_questions'] < 15:
+            logger.info(f"Upgrading session {session_id} from {session['total_questions']} to 15 questions.")
+            conn.execute("UPDATE interview_sessions SET total_questions = 15 WHERE id = ?", (session_id,))
+            conn.commit()
+            # Update local dict to match
+            # session is a Row, convert to dict to modify or just re-fetch?
+            # Easiest is just to trust the new limit logic below
+            session_limit = 15
+        else:
+            session_limit = session['total_questions']
         
         # 3. Check if we've reached the limit
-        if len(answered_ids) >= session['total_questions']:
+        if count_answered >= session_limit:
             conn.close()
             return None # Interview Complete
-
-        # --- FORCE FIRST QUESTION: INTRODUCE YOURSELF ---
-        if len(answered_ids) == 0:
-            # Try to find the specific "Introduce Yourself" question
-            # We look for the text pattern or specific text we seeded
-            intro_q = conn.execute(
-                "SELECT * FROM questions WHERE question_text LIKE 'Tell me about yourself%' LIMIT 1"
-            ).fetchone()
             
-            if intro_q:
-                # If found and not answered (obviously not answered if len is 0), return it
-                logger.info(f"Forcing first question: {intro_q['id']}")
-                conn.close()
-                return dict(intro_q)
-            else:
-                 logger.warning("Introduce Yourself question not found in DB. Falling back to random.")
-
-        # 4. Determine Current Performance (Adaptive Logic)
-        # Calculate average score of answered questions
-        avg_score_row = conn.execute(
-            "SELECT AVG(score) as val FROM answers WHERE session_id = ?", 
-            (session_id,)
-        ).fetchone()
-        current_avg = avg_score_row['val'] if avg_score_row['val'] is not None else 6.0 # Default to Medium start
+        # 4. DETERMINE TARGET DIFFICULTY BASED ON STAGE
+        curr_stage = "Core"
+        target_difficulty = "Medium"
         
-        # 5. Select Target Difficulty
-        target_difficulty = 'Medium'
-        if current_avg >= 7.5:
-            target_difficulty = 'Hard'
-        elif current_avg <= 4.0:
-            target_difficulty = 'Easy'
+        if count_answered < 2:
+            curr_stage = "Warm-up"
+            target_difficulty = "Easy"
+        elif count_answered < 10:
+            curr_stage = "Core"
+            target_difficulty = "Medium"
+        else:
+            # Last 5 questions (10-15)
+            curr_stage = "Advanced"
+            target_difficulty = "Hard"
             
-        # 6. Fetch a Random Unanswered Question matching Difficulty & Skills
-        # Get resume to filter by skills (crucial fix)
+        logger.info(f"Session {session_id}: Fetching Q{count_answered+1} ({curr_stage} - {target_difficulty})")
+
+        # 5. Get User Skills
         resume = get_resume_by_id(session['resume_id'])
         extracted_text = resume['extracted_text']
         skills = extract_skills_from_text(extracted_text)
+        if not skills: skills = ['General']
         
-        # Filter questions by these skills
-        if not skills:
-            skills = ['General'] # Fallback
+        # INJECT CORE SUBJECTS (Standard B.Tech Stack)
+        # Even if not in resume, these are fair game and prevent running out of questions
+        core_subjects = ['DBMS', 'Operating Systems', 'Computer Networks', 'SQL', 'Object Oriented Programming']
+        for result in core_subjects:
+            if result not in skills:
+                skills.append(result)
             
         skill_placeholders = ','.join('?' * len(skills))
+        # Use excluded_ids (global + current session) for no-repeat mode
+        # Fallback: if all questions are exhausted globally, reset to session-only exclusion
+        placeholders = ','.join('?' * len(excluded_ids)) if excluded_ids else '0'
+        exclude_params = excluded_ids if excluded_ids else []
         
-        # Prepare Answered IDs placeholder
-        placeholders = ','.join('?' * len(answered_ids)) if answered_ids else '0'
+        # 6. Fetch Question
+        # Prioritize 'Behavioral' for Warm-up if possible
+        question = None
         
-        # Prioritize Coding questions if not yet asked? 
-        # NO - User requested removal. Explicitly EXCLUDE coding.
-        query = f"""
-            SELECT DISTINCT q.*, s.skill_name
-            FROM questions q
-            JOIN skills s ON q.skill_id = s.id
-            WHERE q.id NOT IN ({placeholders})
-            AND s.skill_name IN ({skill_placeholders})
-            AND q.difficulty = ?
-            AND q.question_type != 'coding' -- Explicitly removed
-            ORDER BY RANDOM()
-            LIMIT 1
-        """
-        
-        params = list(answered_ids) + list(skills) + [target_difficulty]
-        
-        logger.debug(f"Fetching question. Skills: {skills}, Difficulty: {target_difficulty}, Answered questions: {len(answered_ids)}")
-        question = conn.execute(query, params).fetchone()
-        
-        if question:
-            logger.debug(f"Found question: {question['id']} Type: {question['question_type']}")
-        else:
-            logger.debug("No question found with strict criteria. Trying fallback.")
- 
-        # Fallback 1: If no question of target difficulty, try Medium (but still filter by skills)
-        if not question and target_difficulty != 'Medium':
-            query_fallback = f"""
+        if curr_stage == "Warm-up":
+            # 1. ROTATING INTRO: Q1 always picks an unseen 'Introduction'-topic question
+            if count_answered == 0:
+                intro_placeholders = ','.join('?' * len(exclude_params)) if exclude_params else '0'
+                query_intro = f"""
+                    SELECT * FROM questions
+                    WHERE topic = 'Introduction'
+                    AND id NOT IN ({intro_placeholders})
+                    ORDER BY RANDOM() LIMIT 1
+                """
+                question = conn.execute(query_intro, exclude_params).fetchone()
+
+                if not question:
+                    # All intro variants exhausted — pick any unseen Easy question as opener
+                    logger.info("All intro variants seen. Using random Easy question as opener.")
+                    query_intro_fallback = f"""
+                        SELECT q.*, s.skill_name FROM questions q
+                        JOIN skills s ON q.skill_id = s.id
+                        WHERE q.id NOT IN ({intro_placeholders})
+                        AND q.difficulty = 'Easy'
+                        ORDER BY RANDOM() LIMIT 1
+                    """
+                    question = conn.execute(query_intro_fallback, exclude_params).fetchone()
+
+            # 2. General Warm-up (Behavioral or Easy) — respects no-repeat pool
+            if not question:
+                query_warmup = f"""
+                    SELECT DISTINCT q.*, s.skill_name
+                    FROM questions q
+                    JOIN skills s ON q.skill_id = s.id
+                    WHERE q.id NOT IN ({placeholders})
+                    AND (q.topic = 'Behavioral' OR q.difficulty = 'Easy')
+                    ORDER BY RANDOM() LIMIT 1
+                """
+                question = conn.execute(query_warmup, exclude_params).fetchone()
+
+
+        if not question:
+            # Standard Fetch for Core/Advanced — uses global exclusion list
+            query = f"""
                 SELECT DISTINCT q.*, s.skill_name
                 FROM questions q
                 JOIN skills s ON q.skill_id = s.id
                 WHERE q.id NOT IN ({placeholders})
                 AND s.skill_name IN ({skill_placeholders})
-                AND q.question_type != 'coding' -- Explicitly removed
-                ORDER BY RANDOM()
-                LIMIT 1
+                AND q.difficulty = ?
+                -- SAFETY NET for Coding
+                AND (q.question_type != 'coding' OR (q.test_cases IS NOT NULL AND length(q.test_cases) > 5))
+                ORDER BY RANDOM() LIMIT 1
             """
-            params_fallback = list(answered_ids) + list(skills)
-            question = conn.execute(query_fallback, params_fallback).fetchone()
-            
-        # Fallback 2: Any unanswered question (REMOVED)
-        # We no longer fall back to random questions to ensure relevance to the resume.
-        # If no question is found for the extracted skills, the interview naturally ends.
-        
+            params = exclude_params + list(skills) + [target_difficulty]
+            question = conn.execute(query, params).fetchone()
+
+        # Fallback 1: Any Medium question if specific difficulty not found (global exclusion)
+        if not question and target_difficulty != 'Medium':
+            logger.warning(f"No {target_difficulty} question found. Falling back to Medium (Strict Skills).")
+            query_fallback = f"""
+               SELECT DISTINCT q.*, s.skill_name
+               FROM questions q
+               JOIN skills s ON q.skill_id = s.id
+               WHERE q.id NOT IN ({placeholders})
+               AND s.skill_name IN ({skill_placeholders})
+               AND q.difficulty = 'Medium'
+               ORDER BY RANDOM() LIMIT 1
+            """
+            params_kb = exclude_params + list(skills)
+            question = conn.execute(query_fallback, params_kb).fetchone()
+
+            if not question:
+                logger.warning("No Medium question found. Falling back to Easy (Strict Skills).")
+                query_fallback_easy = f"""
+                   SELECT DISTINCT q.*, s.skill_name
+                   FROM questions q
+                   JOIN skills s ON q.skill_id = s.id
+                   WHERE q.id NOT IN ({placeholders})
+                   AND s.skill_name IN ({skill_placeholders})
+                   AND q.difficulty = 'Easy'
+                   ORDER BY RANDOM() LIMIT 1
+                """
+                question = conn.execute(query_fallback_easy, params_kb).fetchone()
+
+        # Fallback 2: Pool exhausted globally — relax to session-only exclusion
+        # This handles the rare case where a user has seen all questions for their skills
+        if not question and len(excluded_ids) > len(answered_ids):
+            logger.warning("Global question pool exhausted for user. Relaxing to session-only exclusion.")
+            session_placeholders = ','.join('?' * len(answered_ids)) if answered_ids else '0'
+            query_relaxed = f"""
+               SELECT DISTINCT q.*, s.skill_name
+               FROM questions q
+               JOIN skills s ON q.skill_id = s.id
+               WHERE q.id NOT IN ({session_placeholders})
+               AND s.skill_name IN ({skill_placeholders})
+               ORDER BY RANDOM() LIMIT 1
+            """
+            question = conn.execute(query_relaxed, list(answered_ids) + list(skills)).fetchone()
+
+        # Fallback 3: ABSOLUTE EMERGENCY - General/Behavioral only
+        if not question:
+            logger.warning("Emergency Fallback: Fetching General/Behavioral question.")
+            emg_placeholders = ','.join('?' * len(answered_ids)) if answered_ids else '0'
+            query_any = f"""
+               SELECT q.*, s.skill_name 
+               FROM questions q
+               JOIN skills s ON q.skill_id = s.id
+               WHERE q.id NOT IN ({emg_placeholders}) 
+               AND (s.skill_name = 'General' OR q.topic = 'Behavioral')
+               LIMIT 1
+            """
+            question = conn.execute(query_any, list(answered_ids)).fetchone()
+             
         conn.close()
         
         if question:
-             return dict(question)
+             # Override difficulty for display consistency in Warm-up
+             q_dict = dict(question)
+             if curr_stage == "Warm-up":
+                 q_dict['difficulty'] = "Easy"
+             
+             return {
+                 'question': q_dict,
+                 'progress': {
+                     'answered': count_answered,
+                     'total': session_limit
+                 }
+             }
         return None
     
     except Exception as e:
-        import traceback
-        with open('traceback.txt', 'w') as f:
-            traceback.print_exc(file=f)
-        # Close connection if open? (Handled by context usually but good practice)
-        if 'conn' in locals():
-            conn.close()
+        if 'conn' in locals(): conn.close()
         logger.error(f"Error in dynamic fetch: {str(e)}")
         return None
 
@@ -327,7 +371,10 @@ def submit_answer(session_id, question_id, user_answer):
             question_id, 
             user_answer, 
             evaluation['score'], 
-            evaluation['feedback']
+            evaluation['feedback'],
+            technical_score=evaluation.get('technical_score', evaluation.get('score', 0)),
+            communication_score=evaluation.get('communication_score', evaluation.get('score', 0)),
+            problem_solving_score=evaluation.get('problem_solving_score', evaluation.get('score', 0))
         )
         
         # Update session score

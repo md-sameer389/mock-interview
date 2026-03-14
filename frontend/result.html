@@ -22,7 +22,7 @@
         <header class="hud-header glass-panel">
             <div class="logo-area">
                 <span class="status-dot online"></span>
-                <span class="system-text">MISSION REPORT</span>
+                <span class="system-text">CANDIDATE EVALUATION FORM</span>
             </div>
             <a href="upload_resume.html" class="primary-btn" style="padding: 8px 16px; font-size: 0.8rem;">
                 NEW SESSION
@@ -66,7 +66,7 @@
             <!-- CENTER: Detailed Results Feed -->
             <section class="results-feed">
                 <div class="feed-header">
-                    <span class="system-text">/// MISSION_LOG</span>
+                    <span class="system-text">/// DETAILED_ASSESSMENT_LOG</span>
                 </div>
                 <div id="answers-list" class="scrollable-feed">
                     <div class="loading-spinner"></div>
@@ -131,27 +131,49 @@
 
                 // List
                 const list = document.getElementById('answers-list');
-                list.innerHTML = data.answers.map((a, i) => `
+                list.innerHTML = data.answers.map((a, i) => {
+                    const techScore = a.technical_score !== undefined ? a.technical_score : a.score;
+                    const commScore = a.communication_score !== undefined ? a.communication_score : a.score;
+                    const probScore = a.problem_solving_score !== undefined ? a.problem_solving_score : a.score;
+
+                    return `
                     <div class="result-card animate-slide-in-right" style="animation-delay: ${i * 0.1}s">
                          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                             <span class="system-text" style="color: var(--secondary-accent); font-size: 0.8rem;">Q${i + 1}</span>
                             <div class="tag">${a.difficulty}</div>
                         </div>
-                        <div class="question-text" style="font-size: 1.1rem; margin-bottom: 0.5rem;">${a.question_text}</div>
+                        <div class="question-text" style="font-size: 1.1rem; margin-bottom: 0.5rem;">Q${i + 1}: ${formatQText(a.question_text)}</div>
                         <div class="answer-box">
-                            <div style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 0.5rem;">USER INPUT:</div>
-                            <div style="color: var(--text-main);">${a.user_answer}</div>
+                            <div style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 0.5rem;">CANDIDATE RESPONSE:</div>
+                             <div style="color: var(--text-main); white-space: pre-wrap;">${formatQText(a.user_answer)}</div>
                         </div>
-                        <div style="margin-top: 1rem; font-size: 0.9rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                             <div style="color: var(--text-dim); margin-bottom: 0.5rem; font-weight: bold;">EVALUATION REPORT:</div>
-                             <div style="white-space: pre-wrap; line-height: 1.5; color: ${a.score >= 5 ? 'var(--text-main)' : 'var(--error-red)'}">${a.feedback}</div>
-                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.5rem;">
-                                 <button onclick="reportIssue(sessionId, ${a.question_id})" class="report-btn">⚠ REPORT ISSUE</button>
-                                 <div style="text-align: right; color: var(--secondary-accent); font-weight: bold;">SCORE: ${a.score}/10</div>
+
+                        <!-- COMPETENCY PILLARS -->
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                             <div style="flex: 1; background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 4px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 2px;">TECHNICAL DEPTH</div>
+                                <div style="color: ${techScore >= 7 ? 'var(--success-green)' : 'var(--text-main)'}; font-weight: bold; font-size: 1.1rem;">${techScore}/10</div>
+                             </div>
+                             <div style="flex: 1; background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 4px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 2px;">PROBLEM SOLVING</div>
+                                <div style="color: ${probScore >= 7 ? 'var(--primary-accent)' : 'var(--text-main)'}; font-weight: bold; font-size: 1.1rem;">${probScore}/10</div>
+                             </div>
+                             <div style="flex: 1; background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 4px; border: 1px solid var(--glass-border);">
+                                <div style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 2px;">COMMUNICATION</div>
+                                <div style="color: ${commScore >= 7 ? 'var(--secondary-accent)' : 'var(--text-main)'}; font-weight: bold; font-size: 1.1rem;">${commScore}/10</div>
+                             </div>
+                        </div>
+
+                        <div style="margin-top: 1rem; font-size: 0.9rem; padding: 1.2rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+                             <div style="color: var(--primary-accent); margin-bottom: 0.8rem; font-weight: bold; font-family: 'JetBrains Mono', monospace;">RECRUITER NOTES:</div>
+                             <div style="white-space: pre-wrap; line-height: 1.6; color: ${a.score >= 5 ? 'var(--text-main)' : 'var(--error-red)'}">${a.feedback}</div>
+                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.8rem;">
+                                 <button onclick="reportIssue('${sessionId}', ${a.question_id})" class="report-btn">⚠ REPORT ISSUE</button>
+                                 <div style="text-align: right; color: var(--text-main); font-weight: bold; font-size: 1.1rem;">OVERALL SCORE: <span style="color: var(--secondary-accent)">${a.score}/10</span></div>
                              </div>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
 
             } catch (e) {
                 console.error(e);
@@ -160,6 +182,18 @@
 
         function triggerConfetti() {
             // Simple JS confetti could go here, omitting for brevity/performance
+        }
+
+        /** Escape HTML and convert \n to <br> for safe multi-line display */
+        function formatQText(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/\\n/g, '<br>')
+                .replace(/\n/g, '<br>');
         }
 
         async function reportIssue(sessId, qId) {

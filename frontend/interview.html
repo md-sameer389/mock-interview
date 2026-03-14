@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/voice.css">
+    <link rel="stylesheet" href="css/coding.css">
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
 </head>
 
 <body class="command-center-body">
@@ -26,7 +29,7 @@
         <header class="hud-header glass-panel">
             <div class="logo-area">
                 <span class="status-dot online"></span>
-                <span class="system-text">AI INTERVIEW SYSTEM <span class="version">v2.0</span></span>
+                <span class="system-text">AI INTERVIEW SYSTEM <span class="version">v2.1 (B.Tech)</span></span>
             </div>
             <div class="session-info">
                 <div class="progress-tracker">
@@ -57,6 +60,12 @@
                     <div class="status-message" id="interviewer-status">Listening...</div>
                 </div>
 
+                <!-- Coding Context Panel (Visible only in coding mode) -->
+                <div class="coding-context-panel" id="coding-context">
+                    <div class="coding-title">Problem Statement</div>
+                    <div class="coding-desc" id="coding-desc-text">Loading...</div>
+                </div>
+
                 <!-- Feedback / System Logs Overlay -->
                 <div id="system-logs" class="system-logs glass-panel-sm" style="display: none;">
                     <div class="log-header">/// SYSTEM LOGS</div>
@@ -72,15 +81,41 @@
                         <span id="question-difficulty" class="tag difficulty-tag">DIFFICULTY_NULL</span>
                         <span id="question-skill" class="tag skill-tag">SKILL_NULL</span>
                     </div>
-                    <h2 id="question-text" class="question-text typing-effect">Initializing Interface...</h2>
+                    <h2 id="question-text" class="question-text typing-effect" style="white-space: pre-line;">
+                        Initializing Interface...</h2>
                     <div id="code-container"
                         style="display: none; margin-top: 15px; background: #1e1e1e; padding: 15px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: #d4d4d4; overflow-x: auto; border: 1px solid #333;">
                         <pre><code id="question-code"></code></pre>
                     </div>
                 </div>
 
+                <!-- CODING MODE: Editor & Console -->
+                <div class="editor-toolbar" id="editor-toolbar">
+                    <div style="font-family: var(--font-code); color: var(--text-dim); font-size: 0.8rem;">PYTHON 3.10
+                    </div>
+                    <button class="run-btn" id="run-code-btn" onclick="runCode()">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2"
+                            fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        RUN CODE
+                    </button>
+                </div>
+
+                <div id="monaco-wrapper">
+                    <div id="monaco-editor"></div>
+                </div>
+
+                <div class="output-console" id="console-panel">
+                    <div class="console-header">
+                        <span>Terminal Output</span>
+                        <span id="console-status">Ready</span>
+                    </div>
+                    <div class="console-content" id="console-output"></div>
+                </div>
+
                 <!-- Command Bar (New Bottom Layout) -->
-                <div class="command-bar glass-panel-dark">
+                <div class="command-bar glass-panel-dark" id="txt-command-bar">
                     <!-- Text Input Area (Auto-expanding) -->
                     <div class="input-area">
                         <textarea id="answer-input" placeholder="Type your answer here..." rows="1"></textarea>
@@ -193,8 +228,20 @@
                 }
 
                 if (data.question) {
+                    // Update global state with server truth
+                    if (data.progress) {
+                        console.log("SERVER PROGRESS:", data.progress);
+                        // Server is authority on progress
+                        // Frontend is 1-indexed for display, answered is 0-indexed count
+                        questionCount = data.progress.answered + 1;
+                        totalQuestions = data.progress.total;
+                    } else {
+                        console.warn("NO PROGRESS DATA FROM SERVER");
+                        // Fallback logic
+                        questionCount++;
+                    }
+
                     currentQuestion = data.question;
-                    questionCount++;
                     displayQuestion();
                 } else {
                     // No more questions -> Results
@@ -205,6 +252,72 @@
                 console.error("Fetch error", e);
                 statusEl.innerText = "Network Error: " + e.message;
                 showToast("Connection Lost", "error");
+            }
+        }
+
+        // ==================== MONACO & CODING ====================
+        let monacoEditor = null;
+        let isCodingMode = false;
+
+        function initMonaco() {
+            if (monacoEditor) return;
+
+            require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } });
+            require(['vs/editor/editor.main'], function () {
+                monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                    value: "# Write your Python solution here\n\ndef solution():\n    pass",
+                    language: 'python',
+                    theme: 'vs-dark',
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true
+                });
+            });
+        }
+
+        async function runCode() {
+            if (!monacoEditor) return;
+            const code = monacoEditor.getValue();
+            const consoleOutput = document.getElementById('console-output');
+            const status = document.getElementById('console-status');
+
+            consoleOutput.innerText = "Running...";
+            status.innerText = "Executing";
+            status.style.color = "#fbc531"; // yellow
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/interview/run-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': localStorage.getItem('token') },
+                    body: JSON.stringify({ code: code })
+                });
+
+                const data = await response.json();
+
+                let outputText = "";
+                if (data.output) outputText += data.output;
+                if (data.error) outputText += "\n[ERROR]\n" + data.error;
+
+                if (!outputText) outputText = "[Process finished with no output]";
+
+                consoleOutput.innerText = outputText;
+
+                if (data.error) {
+                    consoleOutput.className = "console-content error";
+                    status.innerText = "Failed";
+                    status.style.color = "#ff4757";
+                } else {
+                    consoleOutput.className = "console-content";
+                    status.innerText = "Success";
+                    status.style.color = "#4cd137";
+                }
+
+            } catch (e) {
+                consoleOutput.innerText = "Execution Error: " + e.message;
+                status.innerText = "Error";
+                status.style.color = "#ff4757";
             }
         }
 
@@ -221,107 +334,112 @@
             if (!currentQuestion) return;
 
             // Update Progress UI
-            // We might not know EXACT total if dynamic, but let's assume 10 for now or fetch from session info if available
-            // For simplicity, we just show current #
             const progress = (questionCount / totalQuestions) * 100;
             document.getElementById('progress-fill').style.width = `${progress}%`;
             document.getElementById('question-counter').innerText =
                 `${String(questionCount).padStart(2, '0')}/${String(totalQuestions).padStart(2, '0')}`;
 
-            // Text Animations
-            const qText = document.getElementById('question-text');
-            qText.innerText = currentQuestion.question_text || "Error loading text";
+            // === MODE SWITCHING ===
+            const isCoding = currentQuestion.question_type === 'coding' || currentQuestion.question_type === 'output_guess';
+            isCodingMode = isCoding;
+            const mainStage = document.querySelector('.hud-main');
+            const normalInput = document.getElementById('txt-command-bar');
+            const codingToolbar = document.getElementById('editor-toolbar');
+            const monacoWrapper = document.getElementById('monaco-wrapper');
+            const consolePanel = document.getElementById('console-panel');
+            const questionCard = document.getElementById('question-container');
+            const contextPanel = document.getElementById('coding-context');
 
-            // Code Snippet Handling
-            const codeContainer = document.getElementById('code-container');
-            const codeBlock = document.getElementById('question-code');
+            if (isCoding) {
+                // ACTIVATE CODING MODE
+                mainStage.classList.add('coding-mode');
 
-            if (currentQuestion.code_snippet) {
-                codeContainer.style.display = 'block';
-                codeBlock.innerText = currentQuestion.code_snippet;
+                // Hide Standard Items
+                normalInput.style.display = 'none'; // Hide text input, submit button will be moved or we use a separate one? 
+                // Wait, we need submit button functionality. 
+                // For now, let's keep the command bar VISIBLE but hide the textarea input?
+                // actually, the design has a separate RUN button.
+                // We still need SUBMIT to finish.
+                // Let's keep command bar but maybe simplified?
+
+                // My CSS hides question-card by default in .coding-mode
+                // My CSS shows coding-context-panel in .coding-mode
+                // My CSS shows editor/console in .coding-mode
+
+                // Left Panel Content
+                document.querySelector('.coding-title').innerText = currentQuestion.skill_name || "Coding Challenge";
+                document.getElementById('coding-desc-text').innerHTML = formatQuestionText(currentQuestion.question_text);
+
+                // Right Panel Content
+                // Initialize Monaco
+                setTimeout(() => {
+                    initMonaco();
+                    if (monacoEditor) {
+                        // Set default code if provided or template
+                        const defaultCode = currentQuestion.code_snippet || "# Write your solution here\n\ndef solution():\n    # TODO\n    pass";
+                        // Only set value if it differs to avoid overwrite on re-render? 
+                        // Actually re-render usually implies new question.
+                        monacoEditor.setValue(defaultCode);
+                        monacoEditor.layout(); // Fix size
+                    }
+                }, 100);
+
+                // Ensure Command Bar handles "submit"
+                // We might want to show the Submit button in the Toolbar instead?
+                // Or keep the command bar at the bottom just for the "Submit" and "Next" buttons.
+                normalInput.style.display = 'flex'; // Keep it visible for the buttons
+                document.querySelector('.input-area').style.display = 'none'; // Hide text area
+                document.querySelector('.controls-center').style.display = 'none'; // Hide Mic
+
             } else {
-                codeContainer.style.display = 'none';
-                codeBlock.innerText = '';
+                // STANDARD MODE
+                mainStage.classList.remove('coding-mode');
+
+                normalInput.style.display = 'flex';
+                document.querySelector('.input-area').style.display = 'flex'; // Show text area
+                document.querySelector('.controls-center').style.display = 'flex'; // Show Mic
+
+                // Standard Text Updates
+                const qText = document.getElementById('question-text');
+                qText.innerHTML = formatQuestionText(currentQuestion.question_text || 'Error loading text');
+
+                // Tags
+                const diffTag = document.getElementById('question-difficulty');
+                diffTag.innerText = (currentQuestion.difficulty || 'Normal').toUpperCase();
+                diffTag.className = `tag difficulty-tag ${currentQuestion.difficulty?.toLowerCase() || 'medium'}`;
+                document.getElementById('question-skill').innerText = (currentQuestion.skill_name || 'General').toUpperCase();
+
+                // Voice Speaking
+                if (window.voiceManager) {
+                    setTimeout(() => window.voiceManager.speak(currentQuestion.question_text), 500);
+                }
             }
 
-            // ... (rest of display logic handled by existing element updates, ensures currentQuestion is used)
-
-            // Tags
-            const diffTag = document.getElementById('question-difficulty');
-            diffTag.innerText = (currentQuestion.difficulty || 'Normal').toUpperCase();
-            diffTag.className = `tag difficulty-tag ${currentQuestion.difficulty?.toLowerCase() || 'medium'}`;
-
-            document.getElementById('question-skill').innerText = (currentQuestion.skill_name || 'General').toUpperCase();
-
-            // Reset Input
+            // Reset Input (Standard)
             const input = document.getElementById('answer-input');
             input.value = '';
             input.disabled = false;
-            input.focus();
 
-            // Buttons
-            // Buttons
+            // Button States
             const submitBtn = document.getElementById('submit-btn');
             submitBtn.style.display = 'flex';
-            submitBtn.innerHTML = 'INITIALIZE SUBMIT <span class="arrow">→</span>';
+            submitBtn.innerHTML = 'SUBMIT SOLUTION';
             submitBtn.disabled = false;
-
             document.getElementById('next-btn').style.display = 'none';
-
-            updateProgress();
-
-            // Voice Trigger
-            if (window.voiceManager && !currentQuestion.question_type === 'coding') {
-                // Speak unless it's a coding question (optional preference)
-                setTimeout(() => window.voiceManager.speak(currentQuestion.question_text), 500);
-            } else if (window.voiceManager && currentQuestion.question_type !== 'coding') {
-                setTimeout(() => window.voiceManager.speak(currentQuestion.question_text), 500);
-            }
-
-            // === CODE EDITOR MODE CHECK ===
-            const inputArea = document.querySelector('.input-area');
-            const isCoding = currentQuestion.question_type === 'coding';
-            const isOutputGuess = currentQuestion.question_type === 'output_guess';
-
-            if (isCoding || isOutputGuess) {
-                // Formatting for Coding
-                input.classList.add('code-editor');
-                inputArea.classList.add('code-mode');
-
-                if (isCoding) {
-                    input.placeholder = "def solution():\n    # Write your solution here...";
-                } else {
-                    input.placeholder = "Type the exact output here...";
-                }
-
-                // Add specific coding tag if not already handled by generic logic
-                const skillTag = document.getElementById('question-skill');
-                skillTag.innerText = isCoding ? "CODING CHALLENGE" : "OUTPUT PREDICTION";
-                skillTag.className = "tag coding-tag";
-
-                // Disable voice auto-listen?
-                if (window.voiceManager) window.voiceManager.stopListening();
-
-            } else {
-                // Reset to Normal
-                input.classList.remove('code-editor');
-                inputArea.classList.remove('code-mode');
-                input.placeholder = "Type your answer here...";
-                // Skill tag reset is handled above by generic logic (skill_name)
-                // But we overrode it for coding, so generic logic above works fine
-                // as long as this runs AFTER generic logic.
-                // Re-apply generic skill tag if needed?
-                // Actually the generic logic sets it to `currentQuestion.skill_name`.
-                // If we want "Coding Challenge" label, we should override it here.
-            }
         }
 
         async function submitAnswer() {
             // STOP RECORDING IMMEDIATELY
             if (window.voiceManager) window.voiceManager.stopListening();
 
+            let answer = "";
             const answerInput = document.getElementById('answer-input');
-            const answer = answerInput.value.trim();
+
+            if (isCodingMode && monacoEditor) {
+                answer = monacoEditor.getValue();
+            } else {
+                answer = answerInput.value.trim();
+            }
 
             if (!answer) {
                 showToast("INPUT REQUIRED", "error");
@@ -359,7 +477,12 @@
                     fetchNextQuestion(); // Fetch next dynamic question
                 };
 
-                answerInput.disabled = true;
+                // Disable Inputs
+                if (isCodingMode && monacoEditor) {
+                    monacoEditor.updateOptions({ readOnly: true });
+                } else {
+                    answerInput.disabled = true;
+                }
 
             } catch (e) {
                 console.error(e);
@@ -376,6 +499,25 @@
 
 
         // ==================== UTILS ====================
+        /**
+         * Safely convert question text to HTML:
+         * - Escapes any HTML entities to prevent injection
+         * - Converts \n to <br> for proper line breaks
+         * - Wraps code-like lines (starting with spaces/keywords) in <code>
+         */
+        function formatQuestionText(text) {
+            if (!text) return '';
+            // 1. Escape HTML entities
+            const escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            // 2. Convert literal '\\n' strings and actual '\n' newlines to <br>
+            let withBreaks = escaped.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+            // 3. Optional: Wrap code-like blocks if needed (simple heuristic)
+            return withBreaks;
+        }
         function showToast(msg, type = 'info') {
             const toast = document.getElementById('message');
             toast.innerText = msg;

@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS questions (
     question_text TEXT NOT NULL,
     difficulty TEXT NOT NULL CHECK(difficulty IN ('Easy', 'Medium', 'Hard')),
     expected_keywords TEXT NOT NULL,  -- Comma-separated keywords for evaluation
+    question_type TEXT DEFAULT 'text', -- text, coding, behavioral
+    test_cases TEXT, -- JSON list of test cases for coding
+    answer_variants TEXT, -- JSON list of answer variants
+    code_snippet TEXT, -- Starter code
+    correct_output TEXT, -- Expected output for coding
+    topic TEXT DEFAULT 'General', -- Fine-grained topic
+    companies TEXT DEFAULT '[]', -- JSON list of companies
+    hints TEXT DEFAULT '[]', -- JSON list of hints
+    explanation TEXT DEFAULT '', -- Detailed solution explanation
+    difficulty_numeric INTEGER DEFAULT 1, -- 1-10 scale
+    times_asked INTEGER DEFAULT 0,
+    avg_score REAL DEFAULT 0.0,
     FOREIGN KEY (skill_id) REFERENCES skills(id)
 );
 

@@ -65,7 +65,7 @@ def extract_skills_from_text(resume_text):
             
             if not is_broad_skill:
                 # Simple check: Does the skill name appear?
-                if re.search(r'\b' + re.escape(skill_name.lower()) + r'\b', search_scope):
+                if re.search(r'\b' + re.escape(skill_name.lower()) + r'\b', text_lower):
                      is_match = True
                      
                 # If skill name didn't match, check keywords
@@ -73,7 +73,7 @@ def extract_skills_from_text(resume_text):
                     for kw in keywords:
                         kw = kw.strip()
                         if len(kw) <= 2: continue # Ignore ultra-short keywords in global search
-                        if re.search(r'\b' + re.escape(kw) + r'\b', search_scope):
+                        if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
                             is_match = True
                             break
 

@@ -1,0 +1,12 @@
+CID   Name                 Type       NotNull    DfltVal    PK   
+-----------------------------------------------------------------
+0     id                   INTEGER    0          None       1    
+1     skill_id             INTEGER    1          None       0    
+2     question_text        TEXT       1          None       0    
+3     difficulty           TEXT       1          None       0    
+4     expected_keywords    TEXT       1          None       0    
+5     question_type        TEXT       0          'text'     0    
+6     test_cases           TEXT       0          None       0    
+7     answer_variants      TEXT       0          None       0    
+8     code_snippet         TEXT       0          None       0    
+9     correct_output       TEXT       0          None       0    

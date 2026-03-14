@@ -1,0 +1,25 @@
+Skill                          | Count
+--------------------------------------
+Python                         | 46   
+Git                            | 24   
+DBMS                           | 21   
+Machine Learning               | 18   
+Behavioral                     | 16   
+System Design                  | 15   
+General                        | 14   
+Java                           | 12   
+Data Structures                | 10   
+Web Development                | 9    
+C++                            | 8    
+Algorithms                     | 7    
+SQL                            | 7    
+Object Oriented Programming    | 6    
+Computer Networks              | 5    
+Operating Systems              | 5    
+React                          | 4    
+C Programming                  | 2    
+DevOps                         | 2    
+JavaScript                     | 2    
+Database                       | 1    
+--------------------------------------
+Total                          | 234  

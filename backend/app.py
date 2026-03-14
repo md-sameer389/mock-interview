@@ -1,14 +1,7 @@
 import os
-import sys
 import logging
 from flask import Flask
 from flask_cors import CORS
-
-# Fix for Render imports
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
-
 from routes.auth_routes import auth_bp
 from routes.resume_routes import resume_bp
 from routes.interview_routes import interview_bp
@@ -16,83 +9,8 @@ from routes.admin_routes import admin_bp
 from routes.student_routes import student_bp
 from config import SECRET_KEY
 
-# Handle paths relative to the root folder
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(BASE_DIR)
-
-app = Flask(__name__, 
-            static_folder=os.path.join(ROOT_DIR, 'frontend'), 
-            static_url_path='')
+app = Flask(__name__)
 app.secret_key = SECRET_KEY
-
-# Auto-initialize database if it doesn't exist
-def init_db_if_missing():
-    from config import DATABASE_PATH
-    db_dir = os.path.dirname(DATABASE_PATH)
-    if not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    
-    if not os.path.exists(DATABASE_PATH):
-        print("Database not found. Initializing...")
-        try:
-            import sqlite3
-            schema_path = os.path.join(ROOT_DIR, 'database', 'schema.sql')
-            seed_path = os.path.join(ROOT_DIR, 'database', 'seed_questions.sql')
-            
-            conn = sqlite3.connect(DATABASE_PATH)
-            with open(schema_path, 'r') as f:
-                conn.executescript(f.read())
-            
-            if os.path.exists(seed_path):
-                with open(seed_path, 'r') as f:
-                    conn.executescript(f.read())
-            
-            # --- SEED DEFAULT ADMIN ---
-            import bcrypt
-            def hash_pw(pw):
-                return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
-            # Add Default Admin (Required to access dashboard)
-            admin_pw_hash = hash_pw('admin123')
-            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-                         ("Admin User", "admin@mock.com", admin_pw_hash, "admin"))
-            
-            conn.commit()
-            conn.close()
-            print("Database initialized with Admin account successfully.")
-        except Exception as e:
-            print(f"Error initializing database: {e}")
-
-# Run init check
-def ensure_admin_exists():
-    from config import DATABASE_PATH
-    import sqlite3
-    import bcrypt
-    
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        
-        # Check if admin exists
-        admin = conn.execute("SELECT id FROM users WHERE email = ?", ("admin@mock.com",)).fetchone()
-        
-        if not admin:
-            print("Admin user missing. Creating admin account...")
-            def hash_pw(pw):
-                return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
-            admin_pw_hash = hash_pw('admin123')
-            conn.execute("INSERT INTO users (full_name, email, password_hash, role) VALUES (?, ?, ?, ?)",
-                         ("Admin User", "admin@mock.com", admin_pw_hash, "admin"))
-            conn.commit()
-            print("Admin account created successfully.")
-        
-        conn.close()
-    except Exception as e:
-        print(f"Error ensuring admin exists: {e}")
-
-init_db_if_missing()
-ensure_admin_exists()
 
 # Configure logging
 logging.basicConfig(
@@ -101,8 +19,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Enable CORS for all routes/origins for development
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Enable CORS with restricted origins
+CORS(app, resources={
+    r"/*": {"origins": ["*"]}
+})
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(resume_bp)
@@ -112,19 +32,7 @@ app.register_blueprint(student_bp)
 
 @app.route('/')
 def home():
-    # Serve index.html if it exists, else default message
-    try:
-        return app.send_static_file('index.html')
-    except:
-        return 'Mock Interview Platform Backend Running. Access /admin for dashboard.'
-
-@app.route('/admin')
-def admin_dashboard():
-    return app.send_static_file('admin.html')
-
-@app.route('/health')
-def health_check():
-    return {'status': 'healthy'}, 200
+    return 'Mock Interview Platform Backend Running'
 
 @app.errorhandler(404)
 def not_found(error):
@@ -136,6 +44,5 @@ def internal_error(error):
     return {'error': 'Internal server error'}, 500
 
 if __name__=='__main__':
-    port = int(os.environ.get("PORT", 5000))
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, host='0.0.0.0', port=port)
+    app.run(debug=debug_mode, host='127.0.0.1', port=5000)

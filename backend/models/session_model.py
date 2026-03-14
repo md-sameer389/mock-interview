@@ -15,14 +15,14 @@ def create_session(user_id, resume_id, total_questions):
     conn.close()
     return session_id
 
-def save_answer(session_id, question_id, user_answer, score, feedback):
+def save_answer(session_id, question_id, user_answer, score, feedback, technical_score=0.0, communication_score=0.0, problem_solving_score=0.0):
     """
     Save user's answer with score and feedback
     """
     conn = get_db_connection()
     conn.execute(
-        "INSERT INTO answers (session_id, question_id, user_answer, score, feedback) VALUES (?, ?, ?, ?, ?)",
-        (session_id, question_id, user_answer, score, feedback)
+        "INSERT INTO answers (session_id, question_id, user_answer, score, feedback, technical_score, communication_score, problem_solving_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_id, question_id, user_answer, score, feedback, technical_score, communication_score, problem_solving_score)
     )
     conn.commit()
     conn.close()
@@ -121,6 +121,25 @@ def get_answered_questions(session_id):
     ).fetchall()
     conn.close()
     return [row['question_id'] for row in answered]
+
+def get_globally_seen_questions(user_id):
+    """
+    Get all question IDs the user has already been asked across ALL past sessions.
+    Used for cross-session no-repeat mode.
+    Returns a list of question IDs.
+    """
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT DISTINCT a.question_id
+        FROM answers a
+        JOIN interview_sessions s ON a.session_id = s.id
+        WHERE s.user_id = ?
+        """,
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return [row['question_id'] for row in rows]
 
 def get_session_by_id(session_id):
     """

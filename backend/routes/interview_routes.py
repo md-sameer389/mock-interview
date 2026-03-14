@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
 from services.interview_service import (
     start_interview, get_next_question, submit_answer,
+    start_interview, get_next_question, submit_answer,
     get_interview_results, get_history
 )
+from services.execution_service import execute_code
 
 interview_bp = Blueprint("interview", __name__, url_prefix="/interview")
 
@@ -54,12 +56,20 @@ def next_question(current_user_id):
         if not session or session['user_id'] != current_user_id:
             return jsonify({'error': 'Unauthorized access to this session'}), 403
         
-        question = get_next_question(session_id)
+        result = get_next_question(session_id)
         
-        if question:
+        # Debugging: Print progress to console
+        # Debugging: Print progress to console
+        if result:
+            print(f"DEBUG: Session {session_id} | Answered: {result['progress']['answered']} | Total: {result['progress']['total']}")
+        else:
+            print(f"DEBUG: Session {session_id} | Interview Complete")
+        
+        if result:
             return jsonify({
                 'message': 'Next question retrieved',
-                'question': question
+                'question': result['question'],
+                'progress': result['progress']
             }), 200
         else:
             return jsonify({
@@ -69,8 +79,8 @@ def next_question(current_user_id):
     
     except Exception as e:
         import traceback
-        logger.error(f"Error getting next question: {traceback.format_exc()}")
-        return jsonify({'error': 'Error getting next question. Please try again.'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Error getting next question: {str(e)}'}), 500
 
 @interview_bp.route("/submit-answer", methods=["POST"])
 @token_required
@@ -106,8 +116,8 @@ def submit(current_user_id):
         return jsonify({'error': 'Error submitting answer. Please try again.'}), 500
 
 @interview_bp.route("/results/<int:session_id>", methods=["GET"])
-@interview_bp.route("/results/<int:session_id>", methods=["GET"])
-def results(session_id):
+@token_required
+def results(current_user_id, session_id):
     """
     Get interview results
     """
@@ -128,3 +138,20 @@ def history(current_user_id):
     
     except Exception as e:
         return jsonify({'error': f'Error getting history: {str(e)}'}), 500
+
+@interview_bp.route("/run-code", methods=["POST"])
+@token_required
+def run_code(current_user_id):
+    """
+    Run Python code safely-ish
+    Expects JSON: { code }
+    """
+    try:
+        data = request.json
+        if not data or 'code' not in data:
+             return jsonify({'error': 'Code is required'}), 400
+        
+        result = execute_code(data['code'])
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

@@ -55,48 +55,7 @@ def flag_answer(current_user_id):
         logger.error(f"Error flagging answer: {str(e)}")
         return jsonify({'error': 'Error reporting issue. Please try again.'}), 500
 
-
 # --- Admin Dashboard (Admin Facing) ---
-
-@admin_bp.route('/api/admin/reports', methods=['GET'])
-@token_required
-def get_reports(current_user_id):
-    """
-    Get all answers flagged by students.
-    """
-    try:
-        # Verify admin
-        conn = get_db_connection()
-        user = conn.execute("SELECT role FROM users WHERE id = ?", (current_user_id,)).fetchone()
-        if not user or user['role'] != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
-
-        query = """
-            SELECT 
-                a.id as answer_id,
-                a.session_id,
-                a.question_id,
-                a.flag_reason,
-                a.user_answer,
-                a.feedback,
-                a.score,
-                u.full_name as student_name,
-                q.question_text
-            FROM answers a
-            JOIN interview_sessions s ON a.session_id = s.id
-            JOIN users u ON s.user_id = u.id
-            JOIN questions q ON a.question_id = q.id
-            WHERE a.flagged = 1
-            ORDER BY a.answered_at DESC
-        """
-        rows = conn.execute(query).fetchall()
-        reports = [dict(row) for row in rows]
-        conn.close()
-        return jsonify(reports)
-    except Exception as e:
-        logger.error(f"Error fetching reports: {e}")
-        return jsonify({'error': str(e)}), 500
-
 
 @admin_bp.route('/api/admin/stats', methods=['GET'])
 @token_required
@@ -112,23 +71,21 @@ def get_stats(current_user_id):
         if not user or user['role'] != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
         
-        # 1. Total Candidates (All registered students, handling NULLs)
-        total_candidates = conn.execute("SELECT COUNT(*) FROM users WHERE role != 'admin' OR role IS NULL").fetchone()[0]
+        # 1. Total Candidates (All registered students)
+        total_candidates = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'student'").fetchone()[0]
         
-        # 2. Total Interviews (Altered to show ALL sessions started, to match Activity list)
+        # 2. Total Interviews
         total_interviews = conn.execute("SELECT COUNT(*) FROM interview_sessions").fetchone()[0]
-        
-        # Completed Interviews (for readiness calc)
-        completed_interviews = conn.execute("SELECT COUNT(*) FROM interview_sessions WHERE status = 'completed'").fetchone()[0]
         
         # 3. Average Score
         avg_score = conn.execute("SELECT AVG(total_score) FROM interview_sessions WHERE status = 'completed'").fetchone()[0]
         avg_score = round(avg_score, 1) if avg_score else 0.0
         
-        # 4. Placement Readiness (Custom Metric: % of COMPLETED sessions with score > 7)
+        # 4. Placement Readiness (Custom Metric: % of sessions with score > 7)
         strong_sessions = conn.execute("SELECT COUNT(*) FROM interview_sessions WHERE status = 'completed' AND total_score >= 7.0").fetchone()[0]
-        placement_readiness = round((strong_sessions / completed_interviews * 100), 1) if completed_interviews > 0 else 0
+        placement_readiness = round((strong_sessions / total_interviews * 100), 1) if total_interviews > 0 else 0
         
+        conn.close()
         conn.close()
         
         return jsonify({
@@ -138,7 +95,7 @@ def get_stats(current_user_id):
             'placement_readiness': placement_readiness
         })
     except Exception as e:
-        logger.error(f"Stats Error: {e}")
+        print(f"Stats Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/api/admin/activity', methods=['GET'])
@@ -167,7 +124,7 @@ def get_activity():
         conn.close()
         return jsonify(activity)
     except Exception as e:
-        logger.error(f"Activity Error: {e}")
+        print(f"Activity Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/api/admin/students', methods=['GET'])
@@ -201,7 +158,53 @@ def get_students():
         conn.close()
         return jsonify(students)
     except Exception as e:
-        logger.error(f"Students Error: {e}")
+        print(f"Students Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/admin/students/<int:user_id>', methods=['DELETE'])
+def delete_student(user_id):
+    """
+    Delete a student and all their associated data (Cascading delete).
+    """
+    try:
+        conn = get_db_connection()
+        
+        # 1. Check if user exists and is a student
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Optional: Prevent deleting other admins if that was possible via this route
+        # (Though route logic implies students list)
+        if user['role'] == 'admin':
+            conn.close()
+            return jsonify({'error': 'Cannot delete admin accounts via this route'}), 403
+
+        # 2. Delete related data manually (in case FK constraints aren't enabled)
+        # Delete Answers
+        conn.execute("""
+            DELETE FROM answers 
+            WHERE session_id IN (SELECT id FROM interview_sessions WHERE user_id = ?)
+        """, (user_id,))
+        
+        # Delete Sessions
+        conn.execute("DELETE FROM interview_sessions WHERE user_id = ?", (user_id,))
+        
+        # Delete Resumes
+        conn.execute("DELETE FROM resumes WHERE user_id = ?", (user_id,))
+        
+        # 3. Delete User
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Student {user_id} deleted by admin.")
+        return jsonify({'message': 'Student deleted successfully'}), 200
+
+    except Exception as e:
+        logger.error(f"Error deleting student {user_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/api/admin/students/<int:user_id>', methods=['GET'])
@@ -295,7 +298,7 @@ def get_drives():
         return jsonify(drives)
     except Exception as e:
         # Table might not exist if migration failed
-        logger.error(f"Drives Error: {e}")
+        print(f"Drives Error: {e}")
         return jsonify([]), 200 # Return empty list gracefully
 
 @admin_bp.route('/api/admin/drives', methods=['POST'])
@@ -324,6 +327,45 @@ def delete_drive(id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# --- Reports ---
+
+@admin_bp.route('/api/admin/reports', methods=['GET'])
+def get_reports():
+    """
+    Fetch all flagged answers/reports.
+    """
+    try:
+        conn = get_db_connection()
+        query = """
+            SELECT 
+                u.full_name as student_name,
+                a.session_id,
+                q.question_text,
+                a.flag_reason,
+                a.transcript as user_answer,
+                a.feedback,
+                a.score
+            FROM answers a
+            JOIN interview_sessions s ON a.session_id = s.id
+            JOIN users u ON s.user_id = u.id
+            JOIN questions q ON a.question_id = q.id
+            WHERE a.flagged = 1
+            ORDER BY s.started_at DESC
+        """
+        try:
+            rows = conn.execute(query).fetchall()
+            reports = [dict(row) for row in rows]
+        except sqlite3.OperationalError as e:
+            # Handle case where 'flagged' column might be missing if migration didn't run
+            print(f"Reports Query Error (possible missing migration): {e}")
+            reports = []
+
+        conn.close()
+        return jsonify(reports)
+    except Exception as e:
+        print(f"Reports Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # --- System Reset ---
 
 @admin_bp.route('/api/admin/reset', methods=['POST'])
@@ -333,18 +375,132 @@ def system_reset():
     """
     try:
         conn = get_db_connection()
-        # Delete data AND non-admin users to reset candidate count
+        # Delete data but keep users/questions/drives
         conn.execute("DELETE FROM answers")
         conn.execute("DELETE FROM interview_sessions")
-        conn.execute("DELETE FROM users WHERE role != 'admin' OR role IS NULL")
-        
-        # Reset sequences
         conn.execute("UPDATE sqlite_sequence SET seq = 0 WHERE name = 'answers'")
         conn.execute("UPDATE sqlite_sequence SET seq = 0 WHERE name = 'interview_sessions'")
-        # Optional: Reset user sequence if we want IDs to start from 1 again (might skip if admins exist)
-        # conn.execute("UPDATE sqlite_sequence SET seq = 0 WHERE name = 'users'")
         conn.commit()
         conn.close()
         return jsonify({'message': 'System reset successful'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+# --- Question Management ---
+
+@admin_bp.route('/api/admin/questions', methods=['GET'])
+@token_required
+def get_questions(current_user_id):
+    """
+    Get all questions for admin management.
+    """
+    try:
+        # Verify admin
+        conn = get_db_connection()
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if not user or user['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+            
+        query = """
+            SELECT q.id, q.question_text, q.difficulty, q.topic, q.expected_keywords, s.skill_name 
+            FROM questions q
+            JOIN skills s ON q.skill_id = s.id
+            ORDER BY q.id DESC
+        """
+        rows = conn.execute(query).fetchall()
+        questions = [dict(row) for row in rows]
+        
+        # Also fetch skills for the dropdown
+        skills_rows = conn.execute("SELECT id, skill_name FROM skills").fetchall()
+        skills = [dict(row) for row in skills_rows]
+        
+        conn.close()
+        return jsonify({'questions': questions, 'skills': skills})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/admin/questions', methods=['POST'])
+@token_required
+def create_question(current_user_id):
+    """
+    Create a new question.
+    """
+    try:
+        data = request.json
+        # Verify admin
+        conn = get_db_connection()
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if not user or user['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+            
+        # Basic validation
+        if not data.get('question_text') or not data.get('skill_id'):
+            return jsonify({'error': 'Question text and skill are required'}), 400
+            
+        conn.execute("""
+            INSERT INTO questions (skill_id, question_text, difficulty, topic, expected_keywords, question_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            data['skill_id'], 
+            data['question_text'], 
+            data.get('difficulty', 'Medium'),
+            data.get('topic', 'General'),
+            data.get('expected_keywords', ''),
+            data.get('question_type', 'text')
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Question created successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/admin/questions/<int:id>', methods=['PUT'])
+@token_required
+def update_question(current_user_id, id):
+    """
+    Update an existing question.
+    """
+    try:
+        data = request.json
+        # Verify admin
+        conn = get_db_connection()
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if not user or user['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+            
+        conn.execute("""
+            UPDATE questions 
+            SET skill_id = ?, question_text = ?, difficulty = ?, topic = ?, expected_keywords = ?
+            WHERE id = ?
+        """, (
+            data['skill_id'], 
+            data['question_text'], 
+            data.get('difficulty', 'Medium'),
+            data.get('topic', 'General'),
+            data.get('expected_keywords', ''),
+            id
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Question updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/api/admin/questions/<int:id>', methods=['DELETE'])
+@token_required
+def delete_question(current_user_id, id):
+    """
+    Delete a question.
+    """
+    try:
+        # Verify admin
+        conn = get_db_connection()
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if not user or user['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+            
+        conn.execute("DELETE FROM questions WHERE id = ?", (id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Question deleted successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

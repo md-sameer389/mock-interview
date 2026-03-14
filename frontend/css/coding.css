@@ -1,0 +1,214 @@
+/* ==================== CODING PLATFORM EXTENSIONS ==================== */
+
+/* Split Layout for Coding Mode */
+.hud-main.coding-mode {
+    display: flex;
+    /* Override grid */
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-md);
+    height: calc(100vh - 120px);
+    /* Adjust based on header height */
+    overflow: hidden;
+}
+
+/* Left Panel: Question & Context */
+.coding-mode .interviewer-stage {
+    flex: 0 0 35%;
+    /* 35% width */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-right: var(--space-sm);
+    overflow-y: auto;
+    border-right: 1px solid var(--glass-border);
+}
+
+.coding-mode .avatar-container {
+    width: 150px;
+    height: 150px;
+    margin-bottom: var(--space-md);
+    flex-shrink: 0;
+}
+
+.coding-mode .visualizer-circle {
+    width: 80px;
+    height: 80px;
+}
+
+.coding-mode .core-circle {
+    width: 70px;
+    height: 70px;
+}
+
+.coding-mode .wave-1 {
+    width: 90px;
+    height: 90px;
+}
+
+.coding-mode .wave-2 {
+    width: 110px;
+    height: 110px;
+}
+
+.coding-mode .wave-3 {
+    width: 130px;
+    height: 130px;
+}
+
+/* Right Panel: Editor & Output */
+.coding-mode .interaction-zone {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    min-width: 0;
+    /* Important for Monaco resize */
+    height: 100%;
+    margin-bottom: 0;
+}
+
+.coding-mode .question-card {
+    display: none;
+    /* Hide default card */
+}
+
+/* New Context Panel (Left Side Text) */
+.coding-context-panel {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: var(--space-md);
+    margin-top: var(--space-md);
+    overflow-y: auto;
+    flex: 1;
+    margin-bottom: var(--space-md);
+    display: none;
+    /* Hidden by default */
+}
+
+.coding-mode .coding-context-panel {
+    display: block;
+}
+
+.coding-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: var(--space-sm);
+    color: var(--secondary-accent);
+}
+
+.coding-desc {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+}
+
+/* Editor Container */
+#monaco-wrapper {
+    flex: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    background: #1e1e1e;
+    position: relative;
+    display: none;
+    /* Hidden by default */
+}
+
+.coding-mode #monaco-wrapper {
+    display: block;
+}
+
+#monaco-editor {
+    width: 100%;
+    height: 100%;
+}
+
+/* Output Console */
+.output-console {
+    height: 200px;
+    background: #0d0d0d;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: var(--space-md);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #cccccc;
+    display: none;
+    /* Hidden by default */
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.coding-mode .output-console {
+    display: flex;
+}
+
+.console-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.console-content {
+    flex: 1;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+/* Toolbar */
+.editor-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    display: none;
+    /* Hidden by default */
+}
+
+.coding-mode .editor-toolbar {
+    display: flex;
+}
+
+.run-btn {
+    background: var(--success-green);
+    color: #000;
+    /* Dark text on green for visibility */
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-code);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(61, 255, 127, 0.2);
+}
+
+.run-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(61, 255, 127, 0.4);
+    background: #3DFF7F;
+    /* Lighter Green */
+}
+
+.run-btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
