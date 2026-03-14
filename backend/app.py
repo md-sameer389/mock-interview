@@ -13,7 +13,8 @@ from routes.admin_routes import admin_bp
 from routes.student_routes import student_bp
 from config import SECRET_KEY
 
-app = Flask(__name__)
+# Configure Flask to serve the frontend folder at the root path
+app = Flask(__name__, static_folder='../frontend', static_url_path='/')
 app.secret_key = SECRET_KEY
 
 # Configure logging
@@ -36,7 +37,8 @@ app.register_blueprint(student_bp)
 
 @app.route('/')
 def home():
-    return 'Mock Interview Platform Backend Running'
+    # Serve the main frontend page
+    return app.send_static_file('index.html')
 
 @app.errorhandler(404)
 def not_found(error):

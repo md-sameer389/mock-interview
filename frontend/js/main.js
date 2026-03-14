@@ -3,7 +3,9 @@
  * Handles global utilities, animations, and shared logic
  */
 
-const API_BASE_URL = 'http://127.0.0.1:5000'; // Local backend URL
+// Dynamically set API_BASE_URL based on environment
+const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+const API_BASE_URL = isLocal ? 'http://127.0.0.1:5000' : '';
 
 // ==================== AUTH INTERCEPTOR ====================
 const originalFetch = window.fetch;
