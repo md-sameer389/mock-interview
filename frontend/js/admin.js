@@ -602,28 +602,32 @@ function renderQuestionsTable() {
         displayQuestions.sort((a, b) => b.id - a.id);
     }
 
-    tableBody.innerHTML = '';
     if (displayQuestions.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="5">No questions found.</td></tr>';
         return;
     }
 
+    // Batch innerHTML update instead of updating it inside the loop to drastically improve performance
+    let rowsHtml = '';
     displayQuestions.forEach(q => {
-        const qData = encodeURIComponent(JSON.stringify(q));
+        // Check text exists before substring
+        const safeText = q.question_text ? q.question_text.substring(0, 60).replace(/</g, "&lt;").replace(/>/g, "&gt;") + '...' : 'N/A';
         const row = `
             <tr>
                 <td>${q.id}</td>
-                <td>${q.question_text.substring(0, 60)}...</td>
+                <td title="${q.question_text ? q.question_text.replace(/"/g, '&quot;') : ''}">${safeText}</td>
                 <td>${q.skill_name}</td>
                 <td><span class="status-badge" style="color: ${getDiffColor(q.difficulty)}">${q.difficulty}</span></td>
                 <td>
-                    <button class="btn-refresh" style="padding: 4px 8px;" onclick="openQuestionModal('${qData}')">Edit</button>
+                    <button class="btn-refresh" style="padding: 4px 8px;" onclick="openQuestionModal(${q.id})">Edit</button>
                     <button class="btn-refresh" style="padding: 4px 8px; margin-left:5px; color:#ff4757; border-color:#ff4757; background:rgba(255,0,0,0.1);" onclick="deleteQuestion(${q.id})">Del</button>
                 </td>
             </tr>
         `;
-        tableBody.innerHTML += row;
+        rowsHtml += row;
     });
+    
+    tableBody.innerHTML = rowsHtml;
 }
 
 
@@ -633,13 +637,15 @@ function getDiffColor(diff) {
     return '#ff4757';
 }
 
-function openQuestionModal(qData = null) {
+function openQuestionModal(qId = null) {
     const modal = document.getElementById('question-modal');
     modal.style.display = 'flex';
 
-    if (qData) {
-        // Edit Mode
-        const q = JSON.parse(decodeURIComponent(qData));
+    if (qId !== null) {
+        // Edit Mode - Look up question by ID
+        const q = allQuestions.find(item => item.id == qId);
+        if (!q) return;
+
         document.getElementById('question-modal-title').innerText = "Edit Question";
         document.getElementById('q-id').value = q.id;
         document.getElementById('q-text').value = q.question_text;
